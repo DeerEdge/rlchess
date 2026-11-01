@@ -19,8 +19,8 @@ export function cloudflareKv(): Kv | null {
 
 const json = async <T>(kv: Kv, key: string, fallback: T): Promise<T> => { const v = await kv.get(key); return v ? JSON.parse(v) : fallback }
 
-/** Publish a run: state, metrics, games (for the page), the PGN archive, and the live weights/buffer (durable state). */
-export async function publish(run: RunSummary, games: GameRecord[], files: { weights: string; buffer: string; kv?: Kv }) {
+/** Publish a run: summary/metrics/games for the page, the PGN archive, and the worker's live weights/buffer/state (durable). */
+export async function publish(run: RunSummary, games: GameRecord[], files: { weights: string; buffer: string; state: string; kv?: Kv }) {
   const kv = files.kv ?? cloudflareKv()
   if (!kv) { console.warn('publish skipped (no CF_API_TOKEN)'); return }
   const metrics = await json<object[]>(kv, 'metrics', []), { record, ...point } = run
@@ -30,7 +30,7 @@ export async function publish(run: RunSummary, games: GameRecord[], files: { wei
   await kv.put('games', JSON.stringify([...games, ...prev].slice(0, GAMES_CAP)))
   const day = run.ts.slice(0, 10)
   await kv.put(`archive/${day}/run-${run.run}.pgn`, games.map(g => g.pgn).join('\n\n'))
-  await kv.put('weights', files.weights); await kv.put('buffer', files.buffer)
+  await kv.put('weights', files.weights); await kv.put('buffer', files.buffer); await kv.put('worker-state', files.state)
   if (run.run % SNAPSHOT_EVERY === 0) await kv.put(`weights/${day}.json`, files.weights)
 }
 

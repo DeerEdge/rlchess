@@ -32,7 +32,7 @@ export const score = (g: { result: Result; agentWhite: boolean }) => g.result ==
 
 async function main() {
   const t0 = Date.now()
-  if (!existsSync(FILES.state) && await restore({ state: FILES.state, weights: FILES.weights, buffer: FILES.buffer })) console.log('restored state from kv')
+  if (!existsSync(FILES.state) && await restore({ 'worker-state': FILES.state, weights: FILES.weights, buffer: FILES.buffer })) console.log('restored state from kv')
   const state: State = existsSync(FILES.state) ? JSON.parse(readFileSync(FILES.state, 'utf8')) : { run: 0, tier: TIERS[0].name, evalHistory: [], record: {}, gamesTotal: 0 }
   const tier = TIERS.find(t => t.name === state.tier)!, ts = new Date().toISOString()
   const net = createNet(); if (existsSync(FILES.weights)) await loadWeights(net, FILES.weights)
@@ -62,7 +62,7 @@ async function main() {
   state.tier = promote(state.evalHistory, state.tier)
   state.evalHistory = state.evalHistory.slice(-40)
   writeFileSync(FILES.state, JSON.stringify(state, null, 1)); await saveWeights(net, FILES.weights); buffer.save(FILES.buffer)
-  await publish(summary, games, { weights: readFileSync(FILES.weights, 'utf8'), buffer: readFileSync(FILES.buffer, 'utf8') })
+  await publish(summary, games, { weights: readFileSync(FILES.weights, 'utf8'), buffer: readFileSync(FILES.buffer, 'utf8'), state: readFileSync(FILES.state, 'utf8') })
   console.log(`run ${summary.run} tier ${tier.name}→${state.tier} score40 ${summary.score40} elo ${summary.elo} loss ${summary.loss} games ${games.length} buffer ${buffer.samples.length} ${Math.round((Date.now() - t0) / 1000)}s`)
 }
 
