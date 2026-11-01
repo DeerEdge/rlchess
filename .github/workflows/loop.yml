@@ -1,0 +1,32 @@
+name: loop
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+concurrency:
+  group: rlchess
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: sudo apt-get install -y -q stockfish
+      - run: npm ci
+      - run: npm run run
+        env:
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+      - run: |
+          git config user.name rlchess-bot
+          git config user.email rlchess-bot@users.noreply.github.com
+          git add state.json weights.json buffer.jsonl
+          git commit -m "run $(node -p 'require("./state.json").run')" || exit 0
+          git push

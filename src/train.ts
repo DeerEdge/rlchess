@@ -26,9 +26,8 @@ export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch
     const x = toInput(chunk.map(s => encode(new Chess(s.fen)))), t = targets(chunk), z = tf.tensor2d(chunk.map(s => [s.z]))
     const loss = opt.minimize(() => {
       const [p, v] = net.apply(x) as tf.Tensor[]
-      const heads = p.reshape([chunk.length, 64, 2])
-      const gf = tf.gather(heads.slice([0, 0, 0], [-1, 64, 1]).squeeze([2]), t.from, 1, 1)
-      const gt = tf.gather(heads.slice([0, 0, 1], [-1, 64, 1]).squeeze([2]), t.to, 1, 1)
+      const gf = tf.gather(p.slice([0, 0], [-1, 64]), t.from, 1, 1)
+      const gt = tf.gather(p.slice([0, 64], [-1, 64]), t.to, 1, 1)
       const logits = gf.add(gt).add(t.mask.sub(1).mul(1e9))
       const policyLoss = tf.logSoftmax(logits).mul(t.pi).sum(1).neg().mean()
       return policyLoss.add(tf.losses.meanSquaredError(z, v)) as tf.Scalar
