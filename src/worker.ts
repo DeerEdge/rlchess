@@ -75,7 +75,8 @@ async function main() {
     try { return { ...await playGame(agentWhite ? agent : opp, agentWhite ? opp : agent, { maxPlies: MAX_PLIES, record: true, onMove: watch(phase, i + 1, n, against.name, agentWhite) }), agentWhite, against: against.name } } finally { opp.quit() }
   }
   const games: GameRecord[] = []
-  const log = (kind: GameRecord['kind'], g: Game, rating: Pick<GameRecord, 'elo' | 'delta'> = {}) => games.push({ ts, tier: g.against ?? tier.name, kind, result: g.result, pgn: g.pgn, agentWhite: g.agentWhite, plies: g.plies, ...rating })
+  // rated eval games go first so the page's newest games are the ones that moved the rating
+  const log = (kind: GameRecord['kind'], g: Game, rating: Pick<GameRecord, 'elo' | 'delta'> = {}) => games[kind === 'eval' ? 'unshift' : 'push']({ ts, tier: g.against ?? tier.name, kind, result: g.result, pgn: g.pgn, agentWhite: g.agentWhite, plies: g.plies, ...rating })
 
   const deadline = t0 + BUDGET_MS
   const tierGames = await playMany(Math.ceil(GAMES / 2), i => vs(explore, i, trainingTier(tier.name)), deadline)
