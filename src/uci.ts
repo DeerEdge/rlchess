@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import type { Chess } from 'chess.js'
 import type { Tier } from './encode.ts'
-import { randomPlayer, type Player } from './game.ts'
+import { randomPlayer, greedyPlayer, type Player } from './game.ts'
 
 export class EngineTimeout extends Error { constructor(name: string) { super(`${name}: no reply`) } }
 
@@ -45,6 +45,6 @@ export async function uciPlayer(tier: Tier, { movetime, depth, timeoutMs = 5000 
   return player
 }
 
-/** The tier's Player: internal random mover, or a spawned engine. */
+/** The tier's Player: a spawned engine, or one of the internal movers (random, greedy). */
 export const playerFor = (tier: Tier, opts: Opts): Promise<Engine> =>
-  tier.cmd ? uciPlayer(tier, opts) : Promise.resolve(Object.assign(randomPlayer, { quit() {}, evaluate: async () => 0 }))
+  tier.cmd ? uciPlayer(tier, opts) : Promise.resolve(Object.assign(tier.name === 'greedy' ? greedyPlayer : randomPlayer, { quit() {}, evaluate: async () => 0 }))

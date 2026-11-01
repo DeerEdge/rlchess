@@ -14,9 +14,9 @@ const next = (cur: string) => promote(hist(40, 1, cur), cur)
 
 test('promote needs 40 eval games of the current tier at mean >= 0.55', () => {
   assert.equal(promote(hist(39, 1), 'random'), 'random')
-  assert.equal(promote(hist(40, 0.56), 'random'), 'stockfish-0')
+  assert.equal(promote(hist(40, 0.56), 'random'), 'greedy')
   assert.equal(promote(hist(40, 0.54), 'random'), 'random')
   assert.equal(promote([...hist(39, 1), ...hist(1, 1, 'lozza')], 'random'), 'random')
-  assert.equal(promote([...hist(10, 0, 'random'), ...hist(40, 0.6, 'random')], 'random'), 'stockfish-0', 'only the last 40 count')
+  assert.equal(promote([...hist(10, 0, 'random'), ...hist(40, 0.6, 'random')], 'random'), 'greedy', 'only the last 40 count')
   assert.equal(next('stockfish-20'), 'stockfish-20', 'top of the ladder stays')
 })

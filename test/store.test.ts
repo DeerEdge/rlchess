@@ -65,7 +65,7 @@ test('restore pulls the worker files from kv and reports whether anything existe
 test('training opponents are drawn from the tier below, the current tier and the tier above', () => {
   const seen = new Set(Array.from({ length: 200 }, () => trainingTier('stockfish-3').name))
   assert.deepEqual([...seen].sort(), ['stockfish-2', 'stockfish-3', 'stockfish-4'])
-  assert.deepEqual([...new Set(Array.from({ length: 100 }, () => trainingTier(TIERS[0].name).name))].sort(), [TIERS[0].name, TIERS[1].name], 'bottom of the ladder has no tier below')
+  assert.deepEqual([...new Set(Array.from({ length: 100 }, () => trainingTier(TIERS[0].name).name))].sort(), [TIERS[0].name, TIERS[1].name].sort(), 'bottom of the ladder has no tier below')
 })
 
 test('rates summarise the last 40 eval games of the current tier', () => {

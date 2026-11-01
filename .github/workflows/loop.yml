@@ -27,8 +27,8 @@ jobs:
             state.json
             weights.json
             buffer.jsonl
-          key: rlchess-state-${{ github.run_id }}
-          restore-keys: rlchess-state-
+          key: rlchess-state-v2-${{ github.run_id }}
+          restore-keys: rlchess-state-v2-
       - run: |
           sudo apt-get update -q && sudo apt-get install -y -q stockfish
           echo /usr/games >> "$GITHUB_PATH"
@@ -46,7 +46,7 @@ jobs:
             state.json
             weights.json
             buffer.jsonl
-          key: rlchess-state-${{ github.run_id }}
+          key: rlchess-state-v2-${{ github.run_id }}
       # durable state lives in KV; this tiny daily commit only keeps GitHub from disabling the schedule after 60 idle days
       - run: |
           test -f state.json && test $(( $(node -p 'require("./state.json").run') % 72 )) -eq 0 || exit 0

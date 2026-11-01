@@ -1,5 +1,6 @@
 [
   {"name": "random", "rating": 400},
+  {"name": "greedy", "rating": 600},
   {"name": "stockfish-0", "rating": 800, "cmd": ["stockfish"], "options": {"Skill Level": "0"}},
   {"name": "stockfish-1", "rating": 900, "cmd": ["stockfish"], "options": {"Skill Level": "1"}},
   {"name": "stockfish-2", "rating": 1000, "cmd": ["stockfish"], "options": {"Skill Level": "2"}},

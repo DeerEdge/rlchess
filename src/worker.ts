@@ -12,10 +12,10 @@ import { Chess } from 'chess.js'
 import type { EvalEntry } from './elo.ts'
 
 const env = (k: string, d: number) => +(process.env[k] ?? d)
-const GAMES = env('RLCHESS_GAMES', 8), SIMS = env('RLCHESS_SIMS', 40), EVAL_GAMES = env('RLCHESS_EVAL', 10)
+const GAMES = env('RLCHESS_GAMES', 32), SIMS = env('RLCHESS_SIMS', 40), EVAL_GAMES = env('RLCHESS_EVAL', 10)
 const BUDGET_MS = env('RLCHESS_BUDGET_MS', 5 * 60e3) // stop starting training games after this; eval always runs
 const LIVE_MAX = 7 // live snapshots per run (one per finished engine game): 6 publish + 7 live writes × 72 runs ≈ 940/day, under the free KV plan's 1000
-const TRAIN_SAMPLES = 4096, MAX_PLIES = 200, ENGINE = { movetime: 100, depth: 8 }, EVAL_TEMPERATURE_PLIES = 4
+const TRAIN_SAMPLES = 16384, MAX_PLIES = 200, ENGINE = { movetime: 100, depth: 8 }, EVAL_TEMPERATURE_PLIES = 4
 const ANNOTATOR = { name: 'stockfish', rating: 0, cmd: ['stockfish'] }, ANNOTATE_PLIES = 100 // the page replays at most 100 plies
 const FILES = { state: 'state.json', weights: 'weights.json', buffer: 'buffer.jsonl' }
 

@@ -9,6 +9,19 @@ export type Result = '1-0' | '0-1' | '1/2-1/2'
 
 export const randomPlayer: Player = async c => { const m = uciMoves(c); return { move: m[Math.floor(Math.random() * m.length)] } }
 
+const VALUE: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
+/** Ladder rung between random and an engine: mate in one if there is one, else the most valuable capture, else random. */
+export const greedyPlayer: Player = async c => {
+  const moves = c.moves({ verbose: true }).filter(m => !m.promotion || m.promotion === 'q')
+  const mate = moves.find(m => { const t = new Chess(c.fen()); t.move(m); return t.isCheckmate() })
+  const captures = moves.filter(m => m.captured).sort((a, b) => VALUE[b.captured!] - VALUE[a.captured!])
+  const m = mate ?? captures[0]
+  return m ? { move: m.from + m.to + (m.promotion ?? '') } : randomPlayer(c)
+}
+
+/** Material balance in pawns from the side to move's view, for shaping capped games. */
+const material = (c: Chess) => c.board().flat().reduce((s, p) => p ? s + (p.color === c.turn() ? 1 : -1) * VALUE[p.type] : s, 0)
+
 /** MCTS-driven player: Dirichlet noise optional, temperature 1 for the opening plies then greedy. */
 export const agentPlayer = (net: tf.LayersModel, sims: number, opts: { noise?: boolean; temperaturePlies?: number } = {}): Player =>
   async c => {
@@ -18,8 +31,8 @@ export const agentPlayer = (net: tf.LayersModel, sims: number, opts: { noise?: b
     return { move: move!, pi }
   }
 
-export async function playGame(white: Player, black: Player, opts: { maxPlies: number; record: boolean; onMove?: (chess: Chess) => void }) {
-  const chess = new Chess(), taken: { fen: string; pi: Record<string, number>; mover: 'w' | 'b' }[] = []
+export async function playGame(white: Player, black: Player, opts: { maxPlies: number; record: boolean; onMove?: (chess: Chess) => void; fen?: string }) {
+  const chess = new Chess(opts.fen), taken: { fen: string; pi: Record<string, number>; mover: 'w' | 'b' }[] = []
   while (!chess.isGameOver() && chess.history().length < opts.maxPlies) {
     const { move, pi } = await (chess.turn() === 'w' ? white : black)(chess)
     if (opts.record && pi) taken.push({ fen: chess.fen(), pi: Object.fromEntries(pi), mover: chess.turn() })
@@ -29,6 +42,8 @@ export async function playGame(white: Player, black: Player, opts: { maxPlies: n
   const winner = chess.isCheckmate() ? (chess.turn() === 'w' ? 'b' : 'w') : null // ponytail: ply cap and every other end = draw
   const result: Result = winner === 'w' ? '1-0' : winner === 'b' ? '0-1' : '1/2-1/2'
   chess.setHeader('Result', result); chess.setHeader('Date', new Date().toISOString().slice(0, 10))
-  const samples: Sample[] = taken.map(t => ({ fen: t.fen, pi: t.pi, z: winner ? (t.mover === winner ? 1 : -1) : 0 }))
+  // a capped game is a draw for rating, but for training it is scored by material (±0.5 max) so "being up material" is still a signal
+  const capped = !chess.isGameOver(), edge = Math.max(-0.5, Math.min(0.5, material(chess) / 10)) * (chess.turn() === 'w' ? 1 : -1) // white's view
+  const samples: Sample[] = taken.map(t => ({ fen: t.fen, pi: t.pi, z: winner ? (t.mover === winner ? 1 : -1) : capped ? (t.mover === 'w' ? edge : -edge) : 0 }))
   return { pgn: chess.pgn(), result, samples, plies: chess.history().length }
 }
