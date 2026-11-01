@@ -1,0 +1,41 @@
+import * as tf from '@tensorflow/tfjs'
+import { Chess } from 'chess.js'
+import { encode, moveIndex } from './encode.ts'
+import { toInput } from './net.ts'
+import type { Sample } from './game.ts'
+
+/** Policy targets as padded per-sample (from, to) index lists over the sample's own move set. */
+function targets(samples: Sample[]) {
+  const L = Math.max(...samples.map(s => Object.keys(s.pi).length))
+  const from: number[][] = [], to: number[][] = [], mask: number[][] = [], pi: number[][] = []
+  for (const s of samples) {
+    const flip = s.fen.split(' ')[1] === 'b', moves = Object.entries(s.pi)
+    const row = (f: (m: [string, number]) => number, pad: number) => [...moves.map(f), ...Array(L - moves.length).fill(pad)]
+    from.push(row(([m]) => moveIndex(m, flip).from, 0)); to.push(row(([m]) => moveIndex(m, flip).to, 0))
+    mask.push(row(() => 1, 0)); pi.push(row(([, p]) => p, 0))
+  }
+  return { from: tf.tensor2d(from, undefined, 'int32'), to: tf.tensor2d(to, undefined, 'int32'), mask: tf.tensor2d(mask), pi: tf.tensor2d(pi) }
+}
+
+/** One pass over `samples`: cross-entropy on legal-move policy + MSE on value. Returns mean loss. */
+export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch, lr }: { batch: number; lr: number }) {
+  const opt = tf.train.adam(lr), losses: number[] = []
+  const order = samples.map((_, i) => i).sort(() => Math.random() - 0.5)
+  for (let i = 0; i < order.length; i += batch) {
+    const chunk = order.slice(i, i + batch).map(j => samples[j])
+    const x = toInput(chunk.map(s => encode(new Chess(s.fen)))), t = targets(chunk), z = tf.tensor2d(chunk.map(s => [s.z]))
+    const loss = opt.minimize(() => {
+      const [p, v] = net.apply(x) as tf.Tensor[]
+      const heads = p.reshape([chunk.length, 64, 2])
+      const gf = tf.gather(heads.slice([0, 0, 0], [-1, 64, 1]).squeeze([2]), t.from, 1, 1)
+      const gt = tf.gather(heads.slice([0, 0, 1], [-1, 64, 1]).squeeze([2]), t.to, 1, 1)
+      const logits = gf.add(gt).add(t.mask.sub(1).mul(1e9))
+      const policyLoss = tf.logSoftmax(logits).mul(t.pi).sum(1).neg().mean()
+      return policyLoss.add(tf.losses.meanSquaredError(z, v)) as tf.Scalar
+    }, true)!
+    losses.push((await loss.data())[0])
+    tf.dispose([x, z, loss, ...Object.values(t)])
+  }
+  opt.dispose()
+  return { loss: losses.reduce((a, b) => a + b, 0) / losses.length }
+}

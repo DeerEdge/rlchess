@@ -1,0 +1,16 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { Chess } from 'chess.js'
+import { createNet } from '../src/net.ts'
+import { trainEpoch } from '../src/train.ts'
+import type { Sample } from '../src/game.ts'
+
+test('one epoch on a repeated sample lowers the loss', async () => {
+  const net = createNet()
+  const s: Sample = { fen: new Chess().fen(), pi: { e2e4: 0.7, d2d4: 0.3 }, z: 1 }
+  const samples = Array.from({ length: 64 }, () => s)
+  const a = await trainEpoch(net, samples, { batch: 32, lr: 1e-2 })
+  const b = await trainEpoch(net, samples, { batch: 32, lr: 1e-2 })
+  assert.ok(Number.isFinite(a.loss))
+  assert.ok(b.loss < a.loss, `${b.loss} !< ${a.loss}`)
+})
