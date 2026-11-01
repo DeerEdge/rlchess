@@ -3,6 +3,7 @@ import { Chess } from 'chess.js'
 import { encode, moveIndex } from './encode.ts'
 import { toInput } from './net.ts'
 import type { Sample } from './game.ts'
+import { shuffle } from './buffer.ts'
 
 /** Policy targets as padded per-sample (from, to) index lists over the sample's own move set. */
 function targets(samples: Sample[]) {
@@ -21,7 +22,7 @@ function targets(samples: Sample[]) {
 export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch, lr, onBatch }: { batch: number; lr: number; onBatch?: (done: number, total: number, loss: number) => void }) {
   if (!samples.length) return { loss: 0 }
   const opt = tf.train.adam(lr), losses: number[] = []
-  const order = samples.map((_, i) => i).sort(() => Math.random() - 0.5)
+  const order = shuffle(samples.map((_, i) => i))
   for (let i = 0; i < order.length; i += batch) {
     const chunk = order.slice(i, i + batch).map(j => samples[j])
     const x = toInput(chunk.map(s => encode(new Chess(s.fen)))), t = targets(chunk), z = tf.tensor2d(chunk.map(s => [s.v ?? s.z])) // engine value when annotated, else the outcome

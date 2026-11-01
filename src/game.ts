@@ -36,7 +36,7 @@ export async function playGame(white: Player, black: Player, opts: { maxPlies: n
   while (!chess.isGameOver() && chess.history().length < opts.maxPlies) {
     const { move, pi, expert } = await (chess.turn() === 'w' ? white : black)(chess)
     // the agent's search distribution, or an engine's move as a one-hot expert target; random/greedy movers teach nothing
-    const target = pi ? Object.fromEntries([...pi].map(([m, p]) => [m, +p.toFixed(3)])) : expert ? { [move]: 1 } : null
+    const target = pi ? Object.fromEntries([...pi].map(([m, p]) => [m, +p.toFixed(3)])) : expert ? Object.fromEntries(uciMoves(chess).map(m => [m, +(m === move)])) : null
     if (opts.record && target) taken.push({ fen: chess.fen(), pi: target, mover: chess.turn() })
     chess.move({ from: move.slice(0, 2), to: move.slice(2, 4), promotion: move[4] })
     opts.onMove?.(chess)

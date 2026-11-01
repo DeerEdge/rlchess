@@ -45,7 +45,7 @@ export async function search(net: tf.LayersModel, chess: Chess, sims: number, op
     while (node.children) {
       let best: [string, Node] | undefined, bestScore = -Infinity
       for (const [m, ch] of node.children) {
-        const s = (ch.n ? ch.w / ch.n : 0) + C_PUCT * ch.p * Math.sqrt(node.n) / (1 + ch.n)
+        const s = (ch.n ? ch.w / ch.n : 0) + C_PUCT * ch.p * Math.sqrt(node.n + 1) / (1 + ch.n) // +1: with √0 every move ties on the first simulation
         if (s > bestScore) { bestScore = s; best = [m, ch] }
       }
       apply(c, best![0]); node = best![1]; path.push(node)

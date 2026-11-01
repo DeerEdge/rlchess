@@ -1,6 +1,12 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import type { Sample } from './game.ts'
 
+/** Fisher–Yates, in place. (`sort(() => Math.random() - 0.5)` is biased.) */
+export function shuffle<T>(a: T[]): T[] {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]] }
+  return a
+}
+
 /** Replay buffer: JSON lines on disk, newest samples kept. */
 export class ReplayBuffer {
   constructor(public samples: Sample[] = []) {}

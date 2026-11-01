@@ -69,5 +69,13 @@ test('an expert opponent\'s moves become one-hot targets; a plain mover\'s do no
   const expert: Player = async c => ({ move: uciMoves(c)[0], expert: true })
   const g = await playGame(expert, randomPlayer, { maxPlies: 4, record: true })
   assert.equal(g.samples.length, 2, 'only white (the expert) is recorded')
-  assert.deepEqual(Object.values(g.samples[0].pi), [1])
+  const pi = g.samples[0].pi
+  assert.equal(Object.keys(pi).length, 20, 'over every legal move, or the softmax has nothing to push against')
+  assert.equal(Object.values(pi).reduce((a, b) => a + b, 0), 1)
+})
+
+test('shuffle is a permutation', async () => {
+  const { shuffle } = await import('../src/buffer.ts')
+  const a = Array.from({ length: 50 }, (_, i) => i)
+  assert.deepEqual([...shuffle([...a])].sort((x, y) => x - y), a)
 })

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --import tsx --test test/*.test.ts",
+    "restore": "tsx src/worker.ts restore",
     "play": "tsx src/worker.ts play",
     "train": "tsx src/worker.ts train",
     "run": "npm run play -- 0 && npm run train"

@@ -36,6 +36,7 @@ jobs:
       - run: npm ci
       # three cycles of: four game-generation shards (one per core), then one trainer merges them; then the final train + eval + publish
       - run: |
+          npm run restore
           for c in 1 2 3; do
             for i in 0 1 2 3; do npm run play -- $i & done; wait
             npm run train -- cycle
