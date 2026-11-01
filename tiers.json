@@ -1,7 +1,7 @@
 [
   { "name": "random", "rating": 400 },
   { "name": "sunfish", "rating": 1500, "cmd": ["python3", "engines/sunfish.py"] },
-  { "name": "lozza", "rating": 2000, "cmd": ["node", "engines/lozza.js"] },
+  { "name": "lozza", "rating": 2000, "cmd": ["node", "engines/lozza.cjs"] },
   { "name": "stockfish-0", "rating": 800, "cmd": ["stockfish"], "options": { "Skill Level": "0" } },
   { "name": "stockfish-1", "rating": 900, "cmd": ["stockfish"], "options": { "Skill Level": "1" } },
   { "name": "stockfish-2", "rating": 1000, "cmd": ["stockfish"], "options": { "Skill Level": "2" } },
