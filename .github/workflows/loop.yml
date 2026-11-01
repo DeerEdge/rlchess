@@ -10,7 +10,6 @@ concurrency:
   cancel-in-progress: false
 jobs:
   run:
-    environment: env   # secrets live on this environment
     runs-on: ubuntu-24.04   # pinned: the apt Stockfish build is part of the frozen eval protocol
     timeout-minutes: 12
     steps:
