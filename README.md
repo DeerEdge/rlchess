@@ -9,7 +9,7 @@ A super tiny chess net (~86k params, dense MLP + MCTS) that learns in a loop tha
 3. one training epoch over the replay buffer (last 20k positions)
 4. `RLCHESS_EVAL` eval games vs the current tier — the **frozen protocol**: alternating colours, agent at full sims with temperature 1 for the first 4 plies then greedy (so the 10 games aren't the same game), engine at `movetime 100` / `depth 8`, 200-ply cap = draw
 5. promote to the next tier when the last 40 eval games average ≥ 0.55; never demote
-6. write the three files; publish state, metrics, games, the PGN archive and the live weights/buffer to Cloudflare KV (+ a daily weights snapshot)
+6. write the three files; publish state, metrics, games and the live weights/buffer to Cloudflare KV (+ a daily weights snapshot)
 
 GitHub Actions runs this every 20 minutes (`.github/workflows/loop.yml`). Training games stop starting after `RLCHESS_BUDGET_MS` (5 min) so a run fits the job. Hot state rides the Actions cache; durable state is KV (a cache miss restores from it). A tiny `state.json` commit every 72nd run keeps GitHub from disabling the schedule after 60 idle days.
 

@@ -21,7 +21,7 @@ test('publish without CF_* env skips with a warning', async () => {
   assert.ok(logs.some(l => l.includes('publish skipped (no CF_API_TOKEN)')))
 })
 
-test('publish writes state, appends metrics (cap 20000), prepends games (cap 500), archives, snapshots', async () => {
+test('publish writes state, appends metrics (cap 20000), prepends games (cap 500), snapshots', async () => {
   const kv = fakeKv()
   kv.store.set('metrics', JSON.stringify(Array.from({ length: 20000 }, (_, i) => ({ run: i }))))
   kv.store.set('games', JSON.stringify(Array.from({ length: 500 }, (_, i) => ({ pgn: String(i) }))))
@@ -29,7 +29,6 @@ test('publish writes state, appends metrics (cap 20000), prepends games (cap 500
   assert.equal(JSON.parse(kv.store.get('state')!).run, 72)
   const metrics = JSON.parse(kv.store.get('metrics')!); assert.equal(metrics.length, 20000); assert.equal(metrics.at(-1).run, 72)
   const games = JSON.parse(kv.store.get('games')!); assert.equal(games.length, 500); assert.equal(games[0].pgn, '1. e4 *')
-  assert.equal(kv.store.get('archive/2026-10-31/run-72.pgn'), '1. e4 *')
   assert.equal(kv.store.get('weights'), '{"w":1}'); assert.equal(kv.store.get('buffer'), 'line\n')
   assert.equal(kv.store.get('worker-state'), '{"run":96}', 'the worker\'s own state is durable too, separate from the published summary')
   assert.equal(kv.store.get('weights/2026-10-31.json'), '{"w":1}', 'snapshot on every 72nd run')
@@ -85,6 +84,9 @@ test('liveReporter writes the live key at most once per interval, always keeping
   assert.equal(JSON.parse(kv.store.get('live')!).loss, 1)
   assert.ok(JSON.parse(kv.store.get('live')!).ts, 'stamped')
   await liveReporter(null, 0)({ phase: 'idle' }) // no kv: no-op
+  const capped = liveReporter(kv, 0, 2)
+  for (const i of [1, 2, 3]) await capped({ phase: 'play', game: i })
+  assert.equal(JSON.parse(kv.store.get('live')!).game, 2, 'per-run cap')
 })
 
 test('annotate attaches one eval per position, start included, capped at the replay length', async () => {

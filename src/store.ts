@@ -21,7 +21,7 @@ export function cloudflareKv(): Kv | null {
 
 const json = async <T>(kv: Kv, key: string, fallback: T): Promise<T> => { const v = await kv.get(key); return v ? JSON.parse(v) : fallback }
 
-/** Publish a run: summary/metrics/games for the page, the PGN archive, and the worker's live weights/buffer/state (durable). */
+/** Publish a run: summary/metrics/games for the page and the worker's live weights/buffer/state (durable). 6 writes. */
 export async function publish(run: RunSummary, games: GameRecord[], files: { weights: string; buffer: string; state: string; kv?: Kv }) {
   const kv = files.kv ?? cloudflareKv()
   if (!kv) { console.warn('publish skipped (no CF_API_TOKEN)'); return }
@@ -30,18 +30,16 @@ export async function publish(run: RunSummary, games: GameRecord[], files: { wei
   await kv.put('state', JSON.stringify(run))
   await kv.put('metrics', JSON.stringify([...metrics, point].slice(-METRICS_CAP)))
   await kv.put('games', JSON.stringify([...games, ...prev].slice(0, GAMES_CAP)))
-  const day = run.ts.slice(0, 10)
-  await kv.put(`archive/${day}/run-${run.run}.pgn`, games.map(g => g.pgn).join('\n\n'))
   await kv.put('weights', files.weights); await kv.put('buffer', files.buffer); await kv.put('worker-state', files.state)
-  if (run.run % SNAPSHOT_EVERY === 0) await kv.put(`weights/${day}.json`, files.weights)
+  if (run.run % SNAPSHOT_EVERY === 0) await kv.put(`weights/${run.ts.slice(0, 10)}.json`, files.weights)
 }
 
-/** Throttled writer for the `live` key — KV writes are metered, so at most one per `everyMs`. Failures are ignored. */
-export function liveReporter(kv: Kv | null = cloudflareKv(), everyMs = 60e3) {
-  let last = -Infinity
+/** Throttled writer for the `live` key — KV writes are metered, so at most one per `everyMs` and `max` per run. Failures are ignored. */
+export function liveReporter(kv: Kv | null = cloudflareKv(), everyMs = 60e3, max = Infinity) {
+  let last = -Infinity, n = 0
   return async (payload: Live) => {
-    if (!kv || Date.now() - last < everyMs) return
-    last = Date.now()
+    if (!kv || Date.now() - last < everyMs || n >= max) return
+    last = Date.now(); n++
     await kv.put('live', JSON.stringify({ ts: new Date().toISOString(), ...payload })).catch(e => console.warn(`live: ${e.message}`))
   }
 }

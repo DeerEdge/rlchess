@@ -14,7 +14,7 @@ import type { EvalEntry } from './elo.ts'
 const env = (k: string, d: number) => +(process.env[k] ?? d)
 const GAMES = env('RLCHESS_GAMES', 8), SIMS = env('RLCHESS_SIMS', 40), EVAL_GAMES = env('RLCHESS_EVAL', 10)
 const BUDGET_MS = env('RLCHESS_BUDGET_MS', 5 * 60e3) // stop starting training games after this; eval always runs
-const LIVE_MS = env('RLCHESS_LIVE_MS', 120e3) // live-key cadence; KV writes are metered (free plan: 1000/day)
+const LIVE_MS = env('RLCHESS_LIVE_MS', 40e3), LIVE_MAX = 7 // live-key cadence and per-run cap: 6 publish + 7 live writes × 72 runs ≈ 940/day, under the free KV plan's 1000
 const TRAIN_SAMPLES = 4096, MAX_PLIES = 200, ENGINE = { movetime: 100, depth: 8 }, EVAL_TEMPERATURE_PLIES = 4
 const ANNOTATOR = { name: 'stockfish', rating: 0, cmd: ['stockfish'] }, ANNOTATE_PLIES = 100 // the page replays at most 100 plies
 const FILES = { state: 'state.json', weights: 'weights.json', buffer: 'buffer.jsonl' }
@@ -70,7 +70,7 @@ async function main() {
   const net = createNet(); if (existsSync(FILES.weights)) await loadWeights(net, FILES.weights)
   const buffer = ReplayBuffer.load(FILES.buffer)
   const explore = agentPlayer(net, SIMS, { noise: true }), exploit = agentPlayer(net, SIMS, { temperaturePlies: EVAL_TEMPERATURE_PLIES })
-  const run = state.run + 1, live = liveReporter(undefined, LIVE_MS)
+  const run = state.run + 1, live = liveReporter(undefined, LIVE_MS, LIVE_MAX)
   const watch = (phase: 'play' | 'eval', game: number, games: number, against: string, agentWhite: boolean) =>
     (c: Chess) => live({ phase, run, tier: tier.name, game, games, against, agentWhite, pgn: c.pgn() })
   // one engine process per game: a timed-out engine is killed, so it must never be shared across games
