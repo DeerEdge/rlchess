@@ -74,3 +74,22 @@ test('rates summarise the last 40 eval games of the current tier', () => {
   assert.deepEqual(rates(h, 'x'), { score40: 0.5, win40: 0.25, draw40: 0.5 })
   assert.deepEqual(rates([], 'x'), { score40: 0.5, win40: 0, draw40: 0 })
 })
+
+test('liveReporter writes the live key at most once per interval, always keeping the newest payload shape', async () => {
+  const { liveReporter } = await import('../src/store.ts')
+  const kv = fakeKv(), live = liveReporter(kv, 1e9)
+  await live({ phase: 'play', pgn: '1. e4' }); await live({ phase: 'play', pgn: '1. e4 e5' })
+  assert.equal(JSON.parse(kv.store.get('live')!).pgn, '1. e4', 'second write throttled')
+  const eager = liveReporter(kv, 0)
+  await eager({ phase: 'train', loss: 2 }); await eager({ phase: 'train', loss: 1 })
+  assert.equal(JSON.parse(kv.store.get('live')!).loss, 1)
+  assert.ok(JSON.parse(kv.store.get('live')!).ts, 'stamped')
+  await liveReporter(null, 0)({ phase: 'idle' }) // no kv: no-op
+})
+
+test('annotate attaches one eval per position, start included, capped at the replay length', async () => {
+  const { annotate } = await import('../src/worker.ts')
+  const g: GameRecord = { ...game, pgn: '1. e4 e5 2. Nf3 *', plies: 3 }
+  await annotate([g], async fen => fen.split(' ')[1] === 'w' ? 10 : -10)
+  assert.deepEqual(g.evals, [10, -10, 10, -10])
+})

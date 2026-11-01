@@ -18,7 +18,7 @@ function targets(samples: Sample[]) {
 }
 
 /** One pass over `samples`: cross-entropy on legal-move policy + MSE on value. Returns mean loss. */
-export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch, lr }: { batch: number; lr: number }) {
+export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch, lr, onBatch }: { batch: number; lr: number; onBatch?: (done: number, total: number, loss: number) => void }) {
   if (!samples.length) return { loss: 0 }
   const opt = tf.train.adam(lr), losses: number[] = []
   const order = samples.map((_, i) => i).sort(() => Math.random() - 0.5)
@@ -34,6 +34,7 @@ export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch
       return policyLoss.add(tf.losses.meanSquaredError(z, v)) as tf.Scalar
     }, true)!
     losses.push((await loss.data())[0])
+    onBatch?.(losses.length, Math.ceil(order.length / batch), losses.at(-1)!)
     tf.dispose([x, z, loss, ...Object.values(t)])
   }
   opt.dispose()

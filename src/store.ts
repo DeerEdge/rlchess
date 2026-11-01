@@ -1,6 +1,8 @@
 export type Record3 = { w: number; d: number; l: number }
 export type RunSummary = { ts: string; run: number; tier: string; elo: number; score40: number; win40: number; draw40: number; plies: number; buffer: number; seconds: number; gamesTotal: number; loss: number; record: Record<string, Record3> }
-export type GameRecord = { ts: string; tier: string; kind: 'tier' | 'selfplay' | 'eval'; result: string; pgn: string; agentWhite: boolean; plies: number }
+export type GameRecord = { ts: string; tier: string; kind: 'tier' | 'selfplay' | 'eval'; result: string; pgn: string; agentWhite: boolean; plies: number; evals?: number[] }
+/** What the worker is doing right now; the page polls this while a run is in flight. */
+export type Live = { phase: 'play' | 'train' | 'eval'; run?: number; tier?: string; game?: number; games?: number; against?: string; agentWhite?: boolean; pgn?: string; batch?: number; batches?: number; loss?: number }
 export type Kv = { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
 
 const METRICS_CAP = 20000, GAMES_CAP = 500, SNAPSHOT_EVERY = 96 // ≈ daily at a 15-minute cadence
@@ -32,6 +34,16 @@ export async function publish(run: RunSummary, games: GameRecord[], files: { wei
   await kv.put(`archive/${day}/run-${run.run}.pgn`, games.map(g => g.pgn).join('\n\n'))
   await kv.put('weights', files.weights); await kv.put('buffer', files.buffer); await kv.put('worker-state', files.state)
   if (run.run % SNAPSHOT_EVERY === 0) await kv.put(`weights/${day}.json`, files.weights)
+}
+
+/** Throttled writer for the `live` key — KV writes are metered, so at most one per `everyMs`. Failures are ignored. */
+export function liveReporter(kv: Kv | null = cloudflareKv(), everyMs = 60e3) {
+  let last = -Infinity
+  return async (payload: Live) => {
+    if (!kv || Date.now() - last < everyMs) return
+    last = Date.now()
+    await kv.put('live', JSON.stringify({ ts: new Date().toISOString(), ...payload })).catch(e => console.warn(`live: ${e.message}`))
+  }
 }
 
 /** Pull durable state from KV when the local files are missing (cache miss). Returns false if there is nothing yet. */

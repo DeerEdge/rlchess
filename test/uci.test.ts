@@ -36,3 +36,13 @@ test('a silent engine rejects with EngineTimeout', async () => {
   const p = await uciPlayer({ name: 'mute', rating: 0, cmd: ['node', '-e', 'process.stdin.on("data",d=>{if(/^uci/m.test(d))console.log("uciok");if(/isready/.test(d))console.log("readyok")})'] }, { movetime: 100, depth: 8, timeoutMs: 1000 })
   try { await assert.rejects(p(new Chess()), EngineTimeout) } finally { p.quit() }
 })
+
+test('an engine evaluates positions in centipawns from white\'s view, mate as ±1000', { skip: !has('stockfish') }, async () => {
+  const p = await uciPlayer(tier('stockfish-20'), { movetime: 100, depth: 8 })
+  try {
+    assert.ok(Math.abs(await p.evaluate(new Chess().fen())) < 150, 'startpos is roughly level')
+    assert.equal(await p.evaluate('rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3'), -1000, 'white is mated')
+    assert.ok(await p.evaluate('4k3/8/8/8/8/8/8/4K2Q w - - 0 1') > 500, 'white up a queen, white to move')
+    assert.ok(await p.evaluate('4k3/8/8/8/8/8/8/4K2Q b - - 0 1') > 500, 'white up a queen, black to move: still white\'s view')
+  } finally { p.quit() }
+})
