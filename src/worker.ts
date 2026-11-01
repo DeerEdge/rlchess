@@ -7,14 +7,13 @@ import { ReplayBuffer, shuffle } from './buffer.ts'
 import { playerFor, EngineTimeout } from './uci.ts'
 import { trainEpoch } from './train.ts'
 import { update, promote } from './elo.ts'
-import { publish, restore, liveReporter, type GameRecord, type Record3 } from './store.ts'
+import { publish, restore, type GameRecord, type Record3 } from './store.ts'
 import { Chess } from 'chess.js'
 import type { EvalEntry } from './elo.ts'
 
 const env = (k: string, d: number) => +(process.env[k] ?? d)
 const GAMES = env('RLCHESS_GAMES', 32), SIMS = env('RLCHESS_SIMS', 40), EVAL_GAMES = env('RLCHESS_EVAL', 10)
 const BUDGET_MS = env('RLCHESS_BUDGET_MS', 3.5 * 60e3) // per play cycle: stop starting games after this
-const LIVE_MAX = 7 // live snapshots per run, all from the final trainer: 6 publish + 7 live = 13 writes × ≤72 runs/day ≈ 940, under the free KV plan's 1000
 const TRAIN_SAMPLES = 32768, MAX_PLIES = 200, ENGINE = { movetime: 100, depth: 8 }, EVAL_TEMPERATURE_PLIES = 4
 const ANNOTATOR = { name: 'stockfish', rating: 0, cmd: ['stockfish'] }, ANNOTATE_PLIES = 100, ANNOTATE_GAMES = 16 // eval bars for the games the page shows; it replays at most 100 plies
 const FILES = { state: 'state.json', weights: 'weights.json', buffer: 'buffer.jsonl' }
@@ -71,22 +70,17 @@ async function main(mode: 'restore' | 'play' | 'train', shard = '0') {
   if (!existsSync(FILES.state) && await restore({ 'worker-state': FILES.state, weights: FILES.weights, buffer: FILES.buffer })) console.log('restored state from kv')
   if (mode === 'restore') return
   const state: State = existsSync(FILES.state) ? JSON.parse(readFileSync(FILES.state, 'utf8')) : { run: 0, tier: TIERS[0].name, elo: TIERS[0].rating, evalHistory: [], record: {}, gamesTotal: 0 }
-  const tier = TIERS.find(t => t.name === state.tier)!, run = state.run + 1
+  const tier = TIERS.find(t => t.name === state.tier)!
   const ts = new Date(process.env.START ? +process.env.START * 1000 : t0).toISOString() // the run's start (the workflow exports START), so the page's cadence is run-to-run
   const net = createNet()
   if (existsSync(FILES.weights)) try { await loadWeights(net, FILES.weights) } catch { console.warn('weights do not fit this architecture: starting fresh') }
-  const live = mode === 'train' && !cycle ? liveReporter(undefined, 0, LIVE_MAX) : async () => {} // play shards and cycle trainers stay silent
   const games: GameRecord[] = []
   // rated eval games go first so the page's newest games are the ones that moved the rating
   const log = (kind: GameRecord['kind'], g: Game, rating: Pick<GameRecord, 'elo' | 'delta'> = {}) => games[kind === 'eval' ? 'unshift' : 'push']({ ts, tier: g.against ?? tier.name, kind, result: g.result, pgn: g.pgn, agentWhite: g.agentWhite, plies: g.plies, ...rating })
   // one engine process per game: a timed-out engine is killed, so it must never be shared across games
-  const vs = async (agent: Player, i: number, against = tier, phase: 'play' | 'eval' = 'play'): Promise<Game> => {
-    const opp = await playerFor(against, ENGINE), agentWhite = i % 2 === 0, n = phase === 'eval' ? EVAL_GAMES : GAMES
-    try {
-      const g = await playGame(agentWhite ? agent : opp, agentWhite ? opp : agent, { maxPlies: MAX_PLIES, record: true })
-      await live({ phase, run, tier: tier.name, game: i + 1, games: n, against: against.name, agentWhite, pgn: g.pgn, result: g.result })
-      return { ...g, agentWhite, against: against.name }
-    } finally { opp.quit() }
+  const vs = async (agent: Player, i: number, against = tier): Promise<Game> => {
+    const opp = await playerFor(against, ENGINE), agentWhite = i % 2 === 0
+    try { return { ...await playGame(agentWhite ? agent : opp, agentWhite ? opp : agent, { maxPlies: MAX_PLIES, record: true }), agentWhite, against: against.name } } finally { opp.quit() }
   }
 
   if (mode === 'play') {
@@ -104,11 +98,11 @@ async function main(mode: 'restore' | 'play' | 'train', shard = '0') {
   const buffer = ReplayBuffer.load(FILES.buffer), shards = readdirSync('.').filter(f => /^shard-\d+\.json$/.test(f))
   for (const f of shards) { const { games: gs, samples } = JSON.parse(readFileSync(f, 'utf8')); games.push(...gs); buffer.append(samples); unlinkSync(f) }
   const subset = shuffle([...buffer.samples]).slice(0, TRAIN_SAMPLES)
-  const { loss } = await trainEpoch(net, subset, { batch: 256, lr: 1e-3, onBatch: (batch, batches, l) => { if (batch === 1) live({ phase: 'train', run, tier: tier.name, batch, batches, loss: +l.toFixed(4) }) } })
+  const { loss } = await trainEpoch(net, subset, { batch: 256, lr: 1e-3 })
   if (cycle) { await saveWeights(net, FILES.weights); buffer.save(FILES.buffer); return console.log(`cycle: ${games.length} games loss ${loss.toFixed(4)} buffer ${buffer.samples.length} ${Math.round((Date.now() - t0) / 1000)}s`) }
 
   const exploit = agentPlayer(net, SIMS, { temperaturePlies: EVAL_TEMPERATURE_PLIES })
-  const evalGames = await playMany(EVAL_GAMES, i => vs(exploit, i, tier, 'eval'))
+  const evalGames = await playMany(EVAL_GAMES, i => vs(exploit, i))
   const rec = (state.record[tier.name] ??= { w: 0, d: 0, l: 0 })
   for (const g of evalGames) {
     const s = score(g), before = state.elo

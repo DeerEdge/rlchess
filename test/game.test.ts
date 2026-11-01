@@ -44,11 +44,6 @@ test('buffer keeps the newest cap samples and round-trips disk', () => {
   assert.equal(ReplayBuffer.load(path).samples.length, 20)
 })
 
-test('onMove sees the board after every ply', async () => {
-  const plies: number[] = []
-  await playGame(randomPlayer, randomPlayer, { maxPlies: 6, record: false, onMove: c => plies.push(c.history().length) })
-  assert.deepEqual(plies, [1, 2, 3, 4, 5, 6])
-})
 
 test('greedy player takes mate in one, else the most valuable capture, else a random move', async () => {
   const { greedyPlayer } = await import('../src/game.ts')

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --import tsx --test test/*.test.ts",
+    "test": "tsc && node --import tsx --test test/*.test.ts",
     "restore": "tsx src/worker.ts restore",
     "play": "tsx src/worker.ts play",
     "train": "tsx src/worker.ts train",

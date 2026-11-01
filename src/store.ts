@@ -3,8 +3,6 @@ import { gzipSync, gunzipSync } from 'node:zlib'
 export type Record3 = { w: number; d: number; l: number }
 export type RunSummary = { ts: string; run: number; tier: string; elo: number; score40: number; win40: number; draw40: number; plies: number; buffer: number; seconds: number; gamesTotal: number; loss: number; record: Record<string, Record3> }
 export type GameRecord = { ts: string; tier: string; kind: 'tier' | 'selfplay' | 'eval'; result: string; pgn: string; agentWhite: boolean; plies: number; evals?: number[]; elo?: number; delta?: number }
-/** What the worker just did: the last finished engine game, or training progress. The page polls this while a run is in flight. */
-export type Live = { phase: 'play' | 'train' | 'eval'; run?: number; tier?: string; game?: number; games?: number; against?: string; agentWhite?: boolean; pgn?: string; result?: string; batch?: number; batches?: number; loss?: number }
 export type Kv = { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
 
 const METRICS_CAP = 20000, GAMES_CAP = 500, SNAPSHOT_EVERY = 72 // ≈ daily at a 20-minute cadence
@@ -23,7 +21,7 @@ export function cloudflareKv(): Kv | null {
 
 const json = async <T>(kv: Kv, key: string, fallback: T): Promise<T> => { const v = await kv.get(key); return v ? JSON.parse(v) : fallback }
 
-/** Publish a run: summary/metrics/games for the page and the worker's live weights/buffer (gzip+base64)/state (durable). 6 writes. */
+/** Publish a run: summary/metrics/games for the page and the worker's current weights/buffer (gzip+base64)/state (durable). 6 writes. */
 export async function publish(run: RunSummary, games: GameRecord[], files: { weights: string; buffer: string; state: string; kv?: Kv }) {
   const kv = files.kv ?? cloudflareKv()
   if (!kv) { console.warn('publish skipped (no CF_API_TOKEN)'); return }
@@ -34,16 +32,6 @@ export async function publish(run: RunSummary, games: GameRecord[], files: { wei
   await kv.put('games', JSON.stringify([...games, ...prev].slice(0, GAMES_CAP)))
   await kv.put('weights', files.weights); await kv.put('buffer', gzipSync(files.buffer).toString('base64')); await kv.put('worker-state', files.state)
   if (run.run % SNAPSHOT_EVERY === 0) await kv.put(`weights/${run.ts.slice(0, 10)}.json`, files.weights)
-}
-
-/** Throttled writer for the `live` key — KV writes are metered, so at most one per `everyMs` and `max` per run. Failures are ignored. */
-export function liveReporter(kv: Kv | null = cloudflareKv(), everyMs = 60e3, max = Infinity) {
-  let last = -Infinity, n = 0
-  return async (payload: Live) => {
-    if (!kv || Date.now() - last < everyMs || n >= max) return
-    last = Date.now(); n++
-    await kv.put('live', JSON.stringify({ ts: new Date().toISOString(), ...payload })).catch(e => console.warn(`live: ${e.message}`))
-  }
 }
 
 const unpack = (v: string) => { try { return gunzipSync(Buffer.from(v, 'base64')) } catch { return v } } // buffers published before gzip were plain

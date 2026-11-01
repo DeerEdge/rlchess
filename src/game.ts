@@ -31,7 +31,7 @@ export const agentPlayer = (net: tf.LayersModel, sims: number, opts: { noise?: b
     return { move: move!, pi }
   }
 
-export async function playGame(white: Player, black: Player, opts: { maxPlies: number; record: boolean; onMove?: (chess: Chess) => void; fen?: string }) {
+export async function playGame(white: Player, black: Player, opts: { maxPlies: number; record: boolean; fen?: string }) {
   const chess = new Chess(opts.fen), taken: { fen: string; pi: Record<string, number>; mover: 'w' | 'b' }[] = []
   while (!chess.isGameOver() && chess.history().length < opts.maxPlies) {
     const { move, pi, expert } = await (chess.turn() === 'w' ? white : black)(chess)
@@ -39,7 +39,6 @@ export async function playGame(white: Player, black: Player, opts: { maxPlies: n
     const target = pi ? Object.fromEntries([...pi].map(([m, p]) => [m, +p.toFixed(3)])) : expert ? Object.fromEntries(uciMoves(chess).map(m => [m, +(m === move)])) : null
     if (opts.record && target) taken.push({ fen: chess.fen(), pi: target, mover: chess.turn() })
     chess.move({ from: move.slice(0, 2), to: move.slice(2, 4), promotion: move[4] })
-    opts.onMove?.(chess)
   }
   const winner = chess.isCheckmate() ? (chess.turn() === 'w' ? 'b' : 'w') : null // ponytail: ply cap and every other end = draw
   const result: Result = winner === 'w' ? '1-0' : winner === 'b' ? '0-1' : '1/2-1/2'

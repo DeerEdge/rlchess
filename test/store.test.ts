@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { publish, type RunSummary, type GameRecord } from '../src/store.ts'
 import { gunzipSync, gzipSync } from 'node:zlib'
+import type { Sample } from '../src/game.ts'
 import { playMany, score, trainingTier, rates } from '../src/worker.ts'
 import { TIERS } from '../src/encode.ts'
 import { EngineTimeout } from '../src/uci.ts'
@@ -37,13 +38,13 @@ test('publish writes state, appends metrics (cap 20000), prepends games (cap 500
 
 test('playMany drops games whose engine times out instead of throwing', async () => {
   let n = 0
-  const games = await playMany(4, async () => { if (n++ % 2) throw new EngineTimeout('x'); return { pgn: '', result: '1/2-1/2', samples: [], agentWhite: true } })
+  const games = await playMany(4, async () => { if (n++ % 2) throw new EngineTimeout('x'); return { pgn: '', result: '1/2-1/2' as const, samples: [], agentWhite: true, plies: 0 } })
   assert.equal(games.length, 2)
 })
 
 test('playMany stops starting games once the deadline has passed', async () => {
   let started = 0
-  const games = await playMany(10, async () => { started++; await new Promise(r => setTimeout(r, 30)); return { pgn: '', result: '1/2-1/2', samples: [], agentWhite: true } }, Date.now() + 50)
+  const games = await playMany(10, async () => { started++; await new Promise(r => setTimeout(r, 30)); return { pgn: '', result: '1/2-1/2' as const, samples: [], agentWhite: true, plies: 0 } }, Date.now() + 50)
   assert.ok(started < 10 && games.length === started, `started ${started}`)
 })
 
@@ -75,27 +76,13 @@ test('rates summarise the last 40 eval games of the current tier', () => {
   assert.deepEqual(rates([], 'x'), { score40: 0.5, win40: 0, draw40: 0 })
 })
 
-test('liveReporter writes the live key at most once per interval, always keeping the newest payload shape', async () => {
-  const { liveReporter } = await import('../src/store.ts')
-  const kv = fakeKv(), live = liveReporter(kv, 1e9)
-  await live({ phase: 'play', pgn: '1. e4' }); await live({ phase: 'play', pgn: '1. e4 e5' })
-  assert.equal(JSON.parse(kv.store.get('live')!).pgn, '1. e4', 'second write throttled')
-  const eager = liveReporter(kv, 0)
-  await eager({ phase: 'train', loss: 2 }); await eager({ phase: 'train', loss: 1 })
-  assert.equal(JSON.parse(kv.store.get('live')!).loss, 1)
-  assert.ok(JSON.parse(kv.store.get('live')!).ts, 'stamped')
-  await liveReporter(null, 0)({ phase: 'idle' }) // no kv: no-op
-  const capped = liveReporter(kv, 0, 2)
-  for (const i of [1, 2, 3]) await capped({ phase: 'play', game: i })
-  assert.equal(JSON.parse(kv.store.get('live')!).game, 2, 'per-run cap')
-})
 
 test('annotate attaches one eval per position, start included, capped at the replay length', async () => {
   const { annotate, annotateSamples } = await import('../src/worker.ts')
   const g: GameRecord = { ...game, pgn: '1. e4 e5 2. Nf3 *', plies: 3 }
   await annotate([g], async fen => fen.split(' ')[1] === 'w' ? 10 : -10)
   assert.deepEqual(g.evals, [10, -10, 10, -10])
-  const s = [{ fen: 'x w', pi: {}, z: 1 }, { fen: 'x b', pi: {}, z: -1 }]
+  const s: Sample[] = [{ fen: 'x w', pi: {}, z: 1 }, { fen: 'x b', pi: {}, z: -1 }]
   await annotateSamples(s, async () => 400) // +400 cp for white
   assert.deepEqual(s.map(x => x.v), [+Math.tanh(1).toFixed(3), -(+Math.tanh(1).toFixed(3))], 'from the side to move')
 })
