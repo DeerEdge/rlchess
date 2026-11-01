@@ -1,8 +1,8 @@
 export type Record3 = { w: number; d: number; l: number }
 export type RunSummary = { ts: string; run: number; tier: string; elo: number; score40: number; win40: number; draw40: number; plies: number; buffer: number; seconds: number; gamesTotal: number; loss: number; record: Record<string, Record3> }
 export type GameRecord = { ts: string; tier: string; kind: 'tier' | 'selfplay' | 'eval'; result: string; pgn: string; agentWhite: boolean; plies: number; evals?: number[]; elo?: number; delta?: number }
-/** What the worker is doing right now; the page polls this while a run is in flight. */
-export type Live = { phase: 'play' | 'train' | 'eval'; run?: number; tier?: string; game?: number; games?: number; against?: string; agentWhite?: boolean; pgn?: string; batch?: number; batches?: number; loss?: number }
+/** What the worker just did: the last finished engine game, or training progress. The page polls this while a run is in flight. */
+export type Live = { phase: 'play' | 'train' | 'eval'; run?: number; tier?: string; game?: number; games?: number; against?: string; agentWhite?: boolean; pgn?: string; result?: string; batch?: number; batches?: number; loss?: number }
 export type Kv = { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
 
 const METRICS_CAP = 20000, GAMES_CAP = 500, SNAPSHOT_EVERY = 72 // ≈ daily at a 20-minute cadence

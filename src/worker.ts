@@ -14,7 +14,7 @@ import type { EvalEntry } from './elo.ts'
 const env = (k: string, d: number) => +(process.env[k] ?? d)
 const GAMES = env('RLCHESS_GAMES', 8), SIMS = env('RLCHESS_SIMS', 40), EVAL_GAMES = env('RLCHESS_EVAL', 10)
 const BUDGET_MS = env('RLCHESS_BUDGET_MS', 5 * 60e3) // stop starting training games after this; eval always runs
-const LIVE_MS = env('RLCHESS_LIVE_MS', 40e3), LIVE_MAX = 7 // live-key cadence and per-run cap: 6 publish + 7 live writes × 72 runs ≈ 940/day, under the free KV plan's 1000
+const LIVE_MAX = 7 // live snapshots per run (one per finished engine game): 6 publish + 7 live writes × 72 runs ≈ 940/day, under the free KV plan's 1000
 const TRAIN_SAMPLES = 4096, MAX_PLIES = 200, ENGINE = { movetime: 100, depth: 8 }, EVAL_TEMPERATURE_PLIES = 4
 const ANNOTATOR = { name: 'stockfish', rating: 0, cmd: ['stockfish'] }, ANNOTATE_PLIES = 100 // the page replays at most 100 plies
 const FILES = { state: 'state.json', weights: 'weights.json', buffer: 'buffer.jsonl' }
@@ -70,13 +70,15 @@ async function main() {
   const net = createNet(); if (existsSync(FILES.weights)) await loadWeights(net, FILES.weights)
   const buffer = ReplayBuffer.load(FILES.buffer)
   const explore = agentPlayer(net, SIMS, { noise: true }), exploit = agentPlayer(net, SIMS, { temperaturePlies: EVAL_TEMPERATURE_PLIES })
-  const run = state.run + 1, live = liveReporter(undefined, LIVE_MS, LIVE_MAX)
-  const watch = (phase: 'play' | 'eval', game: number, games: number, against: string, agentWhite: boolean) =>
-    (c: Chess) => live({ phase, run, tier: tier.name, game, games, against, agentWhite, pgn: c.pgn() })
+  const run = state.run + 1, live = liveReporter(undefined, 0, LIVE_MAX)
   // one engine process per game: a timed-out engine is killed, so it must never be shared across games
   const vs = async (agent: Player, i: number, against = tier, phase: 'play' | 'eval' = 'play'): Promise<Game> => {
     const opp = await playerFor(against, ENGINE), agentWhite = i % 2 === 0, n = phase === 'eval' ? EVAL_GAMES : GAMES
-    try { return { ...await playGame(agentWhite ? agent : opp, agentWhite ? opp : agent, { maxPlies: MAX_PLIES, record: true, onMove: watch(phase, i + 1, n, against.name, agentWhite) }), agentWhite, against: against.name } } finally { opp.quit() }
+    try {
+      const g = await playGame(agentWhite ? agent : opp, agentWhite ? opp : agent, { maxPlies: MAX_PLIES, record: true })
+      await live({ phase, run, tier: tier.name, game: i + 1, games: n, against: against.name, agentWhite, pgn: g.pgn, result: g.result })
+      return { ...g, agentWhite, against: against.name }
+    } finally { opp.quit() }
   }
   const games: GameRecord[] = []
   // rated eval games go first so the page's newest games are the ones that moved the rating
@@ -84,7 +86,7 @@ async function main() {
 
   const deadline = t0 + BUDGET_MS
   const tierGames = await playMany(Math.ceil(GAMES / 2), i => vs(explore, i, trainingTier(tier.name)), deadline)
-  const selfGames = await playMany(Math.floor(GAMES / 2), async i => ({ ...await playGame(explore, explore, { maxPlies: MAX_PLIES, record: true, onMove: watch('play', tierGames.length + i + 1, GAMES, 'agent', true) }), agentWhite: true }), deadline)
+  const selfGames = await playMany(Math.floor(GAMES / 2), async () => ({ ...await playGame(explore, explore, { maxPlies: MAX_PLIES, record: true }), agentWhite: true }), deadline)
   tierGames.forEach(g => log('tier', g)); selfGames.forEach(g => log('selfplay', g))
   buffer.append([...tierGames, ...selfGames].flatMap(g => g.samples))
   const subset = [...buffer.samples].sort(() => Math.random() - 0.5).slice(0, TRAIN_SAMPLES) // ponytail: good-enough shuffle
