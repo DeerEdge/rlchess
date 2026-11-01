@@ -27,14 +27,17 @@ jobs:
             state.json
             weights.json
             buffer.jsonl
-          key: rlchess-state-v2-${{ github.run_id }}
-          restore-keys: rlchess-state-v2-
+          key: rlchess-state-v3-${{ github.run_id }}
+          restore-keys: rlchess-state-v3-
       - run: |
           sudo apt-get update -q && sudo apt-get install -y -q stockfish
           echo /usr/games >> "$GITHUB_PATH"
       - run: which stockfish && (echo uci | stockfish | head -1) && nproc && cat /proc/cpuinfo | grep -m1 'model name'
       - run: npm ci
-      - run: npm run run
+      # four game-generation shards, one per core, then one trainer merges them
+      - run: |
+          for i in 0 1 2 3; do npm run play -- $i & done; wait
+          npm run train
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
@@ -46,7 +49,7 @@ jobs:
             state.json
             weights.json
             buffer.jsonl
-          key: rlchess-state-v2-${{ github.run_id }}
+          key: rlchess-state-v3-${{ github.run_id }}
       # durable state lives in KV; this tiny daily commit only keeps GitHub from disabling the schedule after 60 idle days
       - run: |
           test -f state.json && test $(( $(node -p 'require("./state.json").run') % 72 )) -eq 0 || exit 0

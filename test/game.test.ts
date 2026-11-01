@@ -11,6 +11,7 @@ test('random vs random stops at the ply cap as a draw with a parseable pgn', asy
   const g = await playGame(randomPlayer, randomPlayer, { maxPlies: 20, record: false })
   assert.ok(['1-0', '0-1', '1/2-1/2'].includes(g.result))
   assert.doesNotThrow(() => new Chess().loadPgn(g.pgn))
+  assert.ok(!g.pgn.includes('['), 'movetext only, no tag pairs')
   assert.equal(g.samples.length, 0)
 })
 

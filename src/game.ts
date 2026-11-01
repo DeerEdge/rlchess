@@ -35,7 +35,7 @@ export async function playGame(white: Player, black: Player, opts: { maxPlies: n
   const chess = new Chess(opts.fen), taken: { fen: string; pi: Record<string, number>; mover: 'w' | 'b' }[] = []
   while (!chess.isGameOver() && chess.history().length < opts.maxPlies) {
     const { move, pi } = await (chess.turn() === 'w' ? white : black)(chess)
-    if (opts.record && pi) taken.push({ fen: chess.fen(), pi: Object.fromEntries(pi), mover: chess.turn() })
+    if (opts.record && pi) taken.push({ fen: chess.fen(), pi: Object.fromEntries([...pi].map(([m, p]) => [m, +p.toFixed(3)])), mover: chess.turn() })
     chess.move({ from: move.slice(0, 2), to: move.slice(2, 4), promotion: move[4] })
     opts.onMove?.(chess)
   }
@@ -45,5 +45,6 @@ export async function playGame(white: Player, black: Player, opts: { maxPlies: n
   // a capped game is a draw for rating, but for training it is scored by material (±0.5 max) so "being up material" is still a signal
   const capped = !chess.isGameOver(), edge = Math.max(-0.5, Math.min(0.5, material(chess) / 10)) * (chess.turn() === 'w' ? 1 : -1) // white's view
   const samples: Sample[] = taken.map(t => ({ fen: t.fen, pi: t.pi, z: winner ? (t.mover === winner ? 1 : -1) : capped ? (t.mover === 'w' ? edge : -edge) : 0 }))
-  return { pgn: chess.pgn(), result, samples, plies: chess.history().length }
+  const pgn = chess.pgn().replace(/^\[.*\]\n?/gm, '').trim() // movetext only: the tag pairs are all "?" and cost more bytes than the moves
+  return { pgn, result, samples, plies: chess.history().length }
 }
