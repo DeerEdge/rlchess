@@ -1,12 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { elo, promote } from '../src/elo.ts'
+import { update, promote } from '../src/elo.ts'
 
-test('elo formula with clamping', () => {
-  assert.equal(elo(0.5, 1500), 1500)
-  assert.ok(Math.abs(elo(0.99, 1500) - 2298) < 1)
-  assert.equal(elo(1, 1500), elo(0.99, 1500))
-  assert.equal(elo(0, 1500), elo(0.01, 1500))
+test('standard Elo update, K = 32', () => {
+  assert.equal(update(400, 400, 1), 416)
+  assert.equal(update(400, 400, 0.5), 400)
+  assert.ok(Math.abs(update(400, 800, 0) - 397.1) < 0.1, 'losing to a much stronger opponent costs little')
+  assert.ok(Math.abs(update(400, 800, 1) - 429.1) < 0.1, 'beating one pays a lot')
 })
 
 const hist = (n: number, score: number, tier = 'random') => Array.from({ length: n }, () => ({ tier, score }))

@@ -1,10 +1,7 @@
 import { TIERS } from './encode.ts'
 
-/** Elo estimate from a score against an opponent of rating R, clamped away from 0/1. */
-export const elo = (score: number, R: number) => {
-  const s = Math.min(0.99, Math.max(0.01, score))
-  return R + 400 * Math.log10(s / (1 - s))
-}
+/** Standard Elo update after one game scored `s` against an opponent rated R. */
+export const update = (elo: number, R: number, s: number, K = 32) => elo + K * (s - 1 / (1 + 10 ** ((R - elo) / 400)))
 
 export type EvalEntry = { tier: string; score: number }
 const WINDOW = 40, THRESHOLD = 0.55
