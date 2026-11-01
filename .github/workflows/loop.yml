@@ -2,18 +2,12 @@ name: loop
 # Runs chain themselves (each dispatches the next 20 minutes after its own start; ~72/day fits the free KV write budget). No cron: GitHub's is best-effort.
 on:
   workflow_dispatch:
-    inputs:
-      mode:
-        description: "full = the chained training run; extra = a game-generation run whose samples feed the next trainer (the page's button)"
-        type: choice
-        options: [full, extra]
-        default: full
-run-name: ${{ inputs.mode || 'full' }}
+run-name: full
 permissions:
   contents: write
   actions: write   # self-dispatch
 concurrency:
-  group: ${{ inputs.mode == 'extra' && format('extra-{0}', github.run_id) || 'rlchess' }}   # extra runs may overlap; the trainer may not
+  group: rlchess
   cancel-in-progress: false
 jobs:
   run:
@@ -40,10 +34,8 @@ jobs:
           echo /usr/games >> "$GITHUB_PATH"
       - run: which stockfish && (echo uci | stockfish | head -1) && nproc && cat /proc/cpuinfo | grep -m1 'model name'
       - run: npm ci
-      # four game-generation shards, one per core, then one trainer merges them (extra runs only play, and upload)
+      # three cycles of: four game-generation shards (one per core), then one trainer merges them; then the final train + eval + publish
       - run: |
-          mode=${{ inputs.mode || 'full' }}
-          if [ "$mode" = extra ]; then for i in 0 1 2 3; do npm run extra -- $i & done; wait; exit 0; fi
           for c in 1 2 3; do
             for i in 0 1 2 3; do npm run play -- $i & done; wait
             npm run train -- cycle
@@ -54,7 +46,7 @@ jobs:
           CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       - uses: actions/cache/save@v4
-        if: always() && inputs.mode != 'extra'
+        if: always()
         with:
           path: |
             state.json

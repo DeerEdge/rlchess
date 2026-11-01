@@ -11,8 +11,7 @@ const game: GameRecord = { ts: run.ts, tier: 'random', kind: 'eval', result: '1-
 
 const fakeKv = () => {
   const store = new Map<string, string>()
-  return { store, get: async (k: string) => store.get(k) ?? null, put: async (k: string, v: string) => { store.set(k, v) },
-    list: async (p: string) => [...store.keys()].filter(k => k.startsWith(p)), delete: async (k: string) => { store.delete(k) } }
+  return { store, get: async (k: string) => store.get(k) ?? null, put: async (k: string, v: string) => { store.set(k, v) } }
 }
 
 test('publish without CF_* env skips with a warning', async () => {
@@ -101,14 +100,3 @@ test('annotate attaches one eval per position, start included, capped at the rep
   assert.deepEqual(s.map(x => x.v), [+Math.tanh(1).toFixed(3), -(+Math.tanh(1).toFixed(3))], 'from the side to move')
 })
 
-test('collectExtra merges and deletes uploaded sample sets', async () => {
-  const { collectExtra } = await import('../src/worker.ts')
-  const kv = fakeKv()
-  kv.store.set('samples/a', JSON.stringify({ games: [game], samples: [{ fen: 'f', pi: {}, z: 0 }] }))
-  kv.store.set('samples/b', JSON.stringify({ games: [game, game], samples: [] }))
-  kv.store.set('weights', 'x')
-  const { games, samples } = await collectExtra(kv)
-  assert.equal(games.length, 3); assert.equal(samples.length, 1)
-  assert.deepEqual([...kv.store.keys()], ['weights'], 'consumed sets are deleted')
-  assert.deepEqual(await collectExtra(null), { games: [], samples: [] })
-})
