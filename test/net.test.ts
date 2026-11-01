@@ -5,10 +5,10 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { createNet, predict, legalPolicy, paramCount, saveWeights, loadWeights } from '../src/net.ts'
 
-test('net stays under the 100k parameter budget', () => {
+test('net stays under the 200k parameter budget', () => {
   const n = paramCount(createNet())
   console.log('params:', n)
-  assert.ok(n < 100_000)
+  assert.ok(n < 200_000)
 })
 
 test('legalPolicy is a distribution over the given moves', () => {

@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { publish, type RunSummary, type GameRecord } from '../src/store.ts'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import { playMany, score, trainingTier, rates } from '../src/worker.ts'
 import { TIERS } from '../src/encode.ts'
 import { EngineTimeout } from '../src/uci.ts'
@@ -30,7 +31,7 @@ test('publish writes state, appends metrics (cap 20000), prepends games (cap 500
   assert.equal(JSON.parse(kv.store.get('state')!).run, 72)
   const metrics = JSON.parse(kv.store.get('metrics')!); assert.equal(metrics.length, 20000); assert.equal(metrics.at(-1).run, 72)
   const games = JSON.parse(kv.store.get('games')!); assert.equal(games.length, 500); assert.equal(games[0].pgn, '1. e4 *')
-  assert.equal(kv.store.get('weights'), '{"w":1}'); assert.equal(kv.store.get('buffer'), 'line\n')
+  assert.equal(kv.store.get('weights'), '{"w":1}'); assert.equal(gunzipSync(Buffer.from(kv.store.get('buffer')!, 'base64')).toString(), 'line\n')
   assert.equal(kv.store.get('worker-state'), '{"run":96}', 'the worker\'s own state is durable too, separate from the published summary')
   assert.equal(kv.store.get('weights/2026-10-31.json'), '{"w":1}', 'snapshot on every 72nd run')
 })
@@ -58,9 +59,9 @@ test('restore pulls the worker files from kv and reports whether anything existe
   const { mkdtempSync, readFileSync } = await import('node:fs'); const { tmpdir } = await import('node:os')
   const dir = mkdtempSync(tmpdir() + '/r'), kv = fakeKv()
   assert.equal(await restore({ 'worker-state': dir + '/state.json' }, kv), false)
-  kv.store.set('worker-state', '{"run":3}')
-  assert.equal(await restore({ 'worker-state': dir + '/state.json' }, kv), true)
-  assert.equal(readFileSync(dir + '/state.json', 'utf8'), '{"run":3}')
+  kv.store.set('worker-state', '{"run":3}'); kv.store.set('buffer', gzipSync('a\nb\n').toString('base64'))
+  assert.equal(await restore({ 'worker-state': dir + '/state.json', buffer: dir + '/buffer.jsonl' }, kv), true)
+  assert.equal(readFileSync(dir + '/state.json', 'utf8'), '{"run":3}'); assert.equal(readFileSync(dir + '/buffer.jsonl', 'utf8'), 'a\nb\n', 'buffer is gunzipped')
 })
 
 test('training opponents are drawn from the tier below, the current tier and the tier above', () => {
@@ -91,10 +92,13 @@ test('liveReporter writes the live key at most once per interval, always keeping
 })
 
 test('annotate attaches one eval per position, start included, capped at the replay length', async () => {
-  const { annotate } = await import('../src/worker.ts')
+  const { annotate, annotateSamples } = await import('../src/worker.ts')
   const g: GameRecord = { ...game, pgn: '1. e4 e5 2. Nf3 *', plies: 3 }
   await annotate([g], async fen => fen.split(' ')[1] === 'w' ? 10 : -10)
   assert.deepEqual(g.evals, [10, -10, 10, -10])
+  const s = [{ fen: 'x w', pi: {}, z: 1 }, { fen: 'x b', pi: {}, z: -1 }]
+  await annotateSamples(s, async () => 400) // +400 cp for white
+  assert.deepEqual(s.map(x => x.v), [+Math.tanh(1).toFixed(3), -(+Math.tanh(1).toFixed(3))], 'from the side to move')
 })
 
 test('collectExtra merges and deletes uploaded sample sets', async () => {

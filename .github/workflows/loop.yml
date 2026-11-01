@@ -1,7 +1,6 @@
 name: loop
+# Runs chain themselves (each dispatches the next 20 minutes after its own start; ~72/day fits the free KV write budget). No cron: GitHub's is best-effort.
 on:
-  schedule:
-    - cron: "*/20 * * * *"   # ~72 runs/day: fits the free KV write budget (1000/day) with live snapshots
   workflow_dispatch:
     inputs:
       mode:
@@ -45,7 +44,10 @@ jobs:
       - run: |
           mode=${{ inputs.mode || 'full' }}
           if [ "$mode" = extra ]; then for i in 0 1 2 3; do npm run extra -- $i & done; wait; exit 0; fi
-          for i in 0 1 2 3; do npm run play -- $i & done; wait
+          for c in 1 2 3; do
+            for i in 0 1 2 3; do npm run play -- $i & done; wait
+            npm run train -- cycle
+          done
           npm run train
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -59,16 +61,7 @@ jobs:
             weights.json
             buffer.jsonl
           key: rlchess-state-v3-${{ github.run_id }}
-      # durable state lives in KV; this tiny daily commit only keeps GitHub from disabling the schedule after 60 idle days
-      - if: inputs.mode != 'extra'
-        run: |
-          test -f state.json && test $(( $(node -p 'require("./state.json").run') % 72 )) -eq 0 || exit 0
-          git config user.name rlchess-bot
-          git config user.email rlchess-bot@users.noreply.github.com
-          git add state.json
-          git commit -m "run $(node -p 'require("./state.json").run')" || exit 0
-          git push
-      # GitHub's cron is best-effort (late or skipped for long stretches), so each run schedules the next one itself; the cron is only a backstop
+      # each run schedules the next one itself, 20 minutes after its own start
       - if: always() && inputs.mode != 'extra'
         run: |
           sleep $(( 1200 - ($(date +%s) - START) > 0 ? 1200 - ($(date +%s) - START) : 0 ))

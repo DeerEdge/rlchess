@@ -64,3 +64,10 @@ test('a game ended by the ply cap scores z by material from each mover\'s view, 
   assert.equal(g.result, '1/2-1/2')
   assert.deepEqual(g.samples.map(s => s.z), [0.5, -0.5, 0.5, -0.5])
 })
+
+test('an expert opponent\'s moves become one-hot targets; a plain mover\'s do not', async () => {
+  const expert: Player = async c => ({ move: uciMoves(c)[0], expert: true })
+  const g = await playGame(expert, randomPlayer, { maxPlies: 4, record: true })
+  assert.equal(g.samples.length, 2, 'only white (the expert) is recorded')
+  assert.deepEqual(Object.values(g.samples[0].pi), [1])
+})

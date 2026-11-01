@@ -33,7 +33,7 @@ export async function uciPlayer(tier: Tier, { movetime, depth, timeoutMs = 5000 
   lines.on('line', l => { const m = l.match(/ score (cp|mate) (-?\d+)/); if (m) score = m[1] === 'cp' ? +m[2] : Math.sign(+m[2] || -1) * 1000 })
   const player = (async (chess: Chess) => {
     send(`position fen ${chess.fen()}`); send(`go movetime ${movetime} depth ${depth}`)
-    return { move: await waitFor(/^bestmove (\S+)/) }
+    return { move: await waitFor(/^bestmove (\S+)/), expert: true }
   }) as Engine
   /** Centipawns from white's view, mate = ±1000. */
   player.evaluate = async fen => {

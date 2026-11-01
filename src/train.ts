@@ -1,4 +1,4 @@
-import * as tf from '@tensorflow/tfjs'
+import tf from './tf.ts'
 import { Chess } from 'chess.js'
 import { encode, moveIndex } from './encode.ts'
 import { toInput } from './net.ts'
@@ -17,14 +17,14 @@ function targets(samples: Sample[]) {
   return { from: tf.tensor2d(from, undefined, 'int32'), to: tf.tensor2d(to, undefined, 'int32'), mask: tf.tensor2d(mask), pi: tf.tensor2d(pi) }
 }
 
-/** One pass over `samples`: cross-entropy on legal-move policy + MSE on value. Returns mean loss. */
+/** One pass over `samples`: cross-entropy on legal-move policy + MSE on value (engine eval if present, else outcome). Returns mean loss. */
 export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch, lr, onBatch }: { batch: number; lr: number; onBatch?: (done: number, total: number, loss: number) => void }) {
   if (!samples.length) return { loss: 0 }
   const opt = tf.train.adam(lr), losses: number[] = []
   const order = samples.map((_, i) => i).sort(() => Math.random() - 0.5)
   for (let i = 0; i < order.length; i += batch) {
     const chunk = order.slice(i, i + batch).map(j => samples[j])
-    const x = toInput(chunk.map(s => encode(new Chess(s.fen)))), t = targets(chunk), z = tf.tensor2d(chunk.map(s => [s.z]))
+    const x = toInput(chunk.map(s => encode(new Chess(s.fen)))), t = targets(chunk), z = tf.tensor2d(chunk.map(s => [s.v ?? s.z])) // engine value when annotated, else the outcome
     const loss = opt.minimize(() => {
       const [p, v] = net.apply(x) as tf.Tensor[]
       const gf = tf.gather(p.slice([0, 0], [-1, 64]), t.from, 1, 1)

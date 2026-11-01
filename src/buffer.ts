@@ -7,6 +7,6 @@ export class ReplayBuffer {
   static load(path: string) {
     return new ReplayBuffer(existsSync(path) ? readFileSync(path, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)) : [])
   }
-  append(samples: Sample[], cap = 20000) { this.samples = [...this.samples, ...samples].slice(-cap) }
+  append(samples: Sample[], cap = 60000) { this.samples = [...this.samples, ...samples].slice(-cap) }
   save(path: string) { writeFileSync(path, this.samples.map(s => JSON.stringify(s)).join('\n') + '\n') }
 }

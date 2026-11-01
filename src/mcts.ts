@@ -1,5 +1,5 @@
 import { Chess } from 'chess.js'
-import type * as tf from '@tensorflow/tfjs'
+import type tf from './tf.ts'
 import { predict, legalPolicy, uciMoves } from './net.ts'
 
 type Node = { n: number; w: number; p: number; children?: Map<string, Node> }

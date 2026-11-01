@@ -1,25 +1,24 @@
-import * as tf from '@tensorflow/tfjs'
+import tf from './tf.ts'
 import type { Chess } from 'chess.js'
 import { readFile, writeFile } from 'node:fs/promises'
 import { encode, moveIndex, PLANES } from './encode.ts'
 
-tf.env().set('IS_NODE', true)
-
-/** Tiny policy/value MLP on the flattened planes: 1152 → 64 → 64 → policy 128 (from/to logits) + value tanh.
- *  ponytail: dense, not conv — tfjs's pure-JS conv backprop is ~40× slower; 86k params, 0.8 ms/predict. */
+/** Small conv tower on the 8×8×18 planes: 4 × (3×3, 64 filters) → policy head (1×1 conv → 128 from/to logits) + value head (1×1 conv → 64 → tanh).
+ *  142k params; 2.7 ms/predict, 0.2 s per 256-batch on the native CPU backend. */
 export function createNet(): tf.LayersModel {
-  const input = tf.input({ shape: [PLANES * 64] })
+  const input = tf.input({ shape: [8, 8, PLANES] })
   let x: tf.SymbolicTensor = input
-  for (const units of [64, 64]) x = tf.layers.dense({ units, activation: 'relu' }).apply(x) as tf.SymbolicTensor
-  const policy = tf.layers.dense({ units: 128, name: 'policy' }).apply(x) as tf.SymbolicTensor
-  const value = tf.layers.dense({ units: 1, activation: 'tanh', name: 'value' }).apply(x) as tf.SymbolicTensor
+  for (let i = 0; i < 4; i++) x = tf.layers.conv2d({ filters: 64, kernelSize: 3, padding: 'same', activation: 'relu' }).apply(x) as tf.SymbolicTensor
+  const head = (filters: number) => tf.layers.flatten().apply(tf.layers.conv2d({ filters, kernelSize: 1, activation: 'relu' }).apply(x)) as tf.SymbolicTensor
+  const policy = tf.layers.dense({ units: 128, name: 'policy' }).apply(head(2)) as tf.SymbolicTensor
+  const value = tf.layers.dense({ units: 1, activation: 'tanh', name: 'value' }).apply(tf.layers.dense({ units: 64, activation: 'relu' }).apply(head(1)) as tf.SymbolicTensor) as tf.SymbolicTensor
   return tf.model({ inputs: input, outputs: [policy, value] })
 }
 
 export const paramCount = (net: tf.LayersModel) => net.countParams()
 
-/** Planes [PLANES*64] per sample → input tensor [n, PLANES*64]. */
-export const toInput = (planes: Float32Array[]) => tf.tensor(planes.flatMap(p => [...p]), [planes.length, PLANES * 64])
+/** Planes [PLANES*64] per sample (plane-major) → input tensor [n, 8, 8, PLANES] (channels last). */
+export const toInput = (planes: Float32Array[]) => tf.tidy(() => tf.tensor(planes.flatMap(p => [...p]), [planes.length, PLANES, 8, 8]).transpose([0, 2, 3, 1]))
 
 /** Policy output = 64 from-square logits followed by 64 to-square logits. */
 export const splitPolicy = (logits: Float32Array | number[]) => ({ from: Float32Array.from(logits.slice(0, 64)), to: Float32Array.from(logits.slice(64, 128)) })
