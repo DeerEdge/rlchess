@@ -97,3 +97,13 @@ DeerEdge/rlchess (public)          DeerEdge/portfolio (this repo)
 ## Phase two (not in scope, recorded so phase one doesn't block it)
 
 Same worker/Blob/Redis/API/page pattern with the chess engine replaced by a tiny seeded Polytopia-like sim and the opponents replaced by scripted factions + hazards. The dashboard, the curriculum logic, and the replay machinery should be written so that "game" is an interface, not chess-specific, where it costs nothing to do so — but not at the expense of shipping chess.
+
+
+## Amendments (2026-10-31, during build)
+
+- **Storage is Cloudflare KV** (owner decision), not Redis + Vercel Blob. Keys: `state`, `metrics`, `games`, `archive/<day>/run-<n>.pgn`, `weights`, `buffer`, `weights/<day>.json`. Env: `CF_ACCOUNT_ID`, `CF_KV_NAMESPACE_ID`, `CF_API_TOKEN`. Durable state is KV; the Actions cache is the fast path; a `state.json` commit every 96th run only keeps the schedule alive.
+- **Net is a dense MLP** (1152→64→64→128+1, 86k params): tfjs's pure-JS conv backprop is ~40× too slow on CPU.
+- **Ladder is sorted by rating**: random 400, stockfish-0…7 800–1500, sunfish 1500, stockfish-8…12, lozza 2000, stockfish-13…20. p4wn dropped (not a UCI engine).
+- **Eval protocol**: agent uses temperature 1 for the first 4 plies, then greedy — otherwise the 10 eval games against a deterministic engine collapse into ~2 distinct games.
+- **Run budget**: training games stop starting after 5 min; training uses a 4096-sample subset of the buffer per run.
+- **Page route is `/rlchess`** (a section beside `blog` in the rails), not under the blog.

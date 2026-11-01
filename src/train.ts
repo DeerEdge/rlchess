@@ -19,6 +19,7 @@ function targets(samples: Sample[]) {
 
 /** One pass over `samples`: cross-entropy on legal-move policy + MSE on value. Returns mean loss. */
 export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch, lr }: { batch: number; lr: number }) {
+  if (!samples.length) return { loss: 0 }
   const opt = tf.train.adam(lr), losses: number[] = []
   const order = samples.map((_, i) => i).sort(() => Math.random() - 0.5)
   for (let i = 0; i < order.length; i += batch) {

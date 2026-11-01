@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Chess } from 'chess.js'
 import { playGame, randomPlayer, type Player } from '../src/game.ts'
-import { Buffer } from '../src/buffer.ts'
+import { ReplayBuffer } from '../src/buffer.ts'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
@@ -32,11 +32,11 @@ test('the ply cap ends an unfinished game as a draw', async () => {
 })
 
 test('buffer keeps the newest cap samples and round-trips disk', () => {
-  const b = new Buffer()
+  const b = new ReplayBuffer()
   b.append(Array.from({ length: 30 }, (_, i) => ({ fen: String(i), pi: {}, z: 0 })), 20)
   assert.equal(b.samples.length, 20)
   assert.equal(b.samples[0].fen, '10')
   const path = mkdtempSync(tmpdir() + '/b') + '/buf.jsonl'
   b.save(path)
-  assert.equal(Buffer.load(path).samples.length, 20)
+  assert.equal(ReplayBuffer.load(path).samples.length, 20)
 })

@@ -13,9 +13,14 @@ export async function uciPlayer(tier: Tier, { movetime, depth, timeoutMs = 5000 
   const [cmd, ...args] = tier.cmd!
   const proc = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'ignore'] })
   const lines = createInterface({ input: proc.stdout })
-  const send = (s: string) => proc.stdin.write(s + '\n')
+  let dead: Error | null = null
+  const die = () => { dead ??= new EngineTimeout(tier.name); proc.kill() }
+  proc.on('error', die); proc.on('exit', () => { dead ??= new EngineTimeout(tier.name) })
+  const send = (s: string) => { if (!dead) proc.stdin.write(s + '\n') }
+  // A reply that arrives after its deadline would be read as the answer to the next position, so a timeout kills the engine.
   const waitFor = (re: RegExp) => new Promise<string>((resolve, reject) => {
-    const timer = setTimeout(() => { lines.off('line', onLine); reject(new EngineTimeout(tier.name)) }, timeoutMs)
+    if (dead) return reject(dead)
+    const timer = setTimeout(() => { lines.off('line', onLine); die(); reject(dead) }, timeoutMs)
     const onLine = (l: string) => { const m = l.match(re); if (m) { clearTimeout(timer); lines.off('line', onLine); resolve(m[1] ?? l) } }
     lines.on('line', onLine)
   })
@@ -27,6 +32,7 @@ export async function uciPlayer(tier: Tier, { movetime, depth, timeoutMs = 5000 
     return { move: await waitFor(/^bestmove (\S+)/) }
   }) as Player & { quit(): void }
   player.quit = () => { send('quit'); proc.kill() }
+  proc.stdin.on('error', () => {})
   return player
 }
 

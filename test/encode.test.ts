@@ -28,7 +28,8 @@ test('moveIndex maps uci squares to 0-63 (a1 = 0), with optional flip', () => {
   assert.deepEqual(moveIndex('e7e5', true), { from: 12, to: 28 })
 })
 
-test('tiers are ordered by rating with random first', () => {
+test('tiers are a ladder sorted by rating with random first', () => {
   assert.equal(TIERS[0].name, 'random')
   assert.ok(TIERS.length >= 20)
+  assert.ok(TIERS.every((t, i) => !i || TIERS[i - 1].rating <= t.rating), 'not sorted by rating')
 })

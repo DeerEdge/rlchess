@@ -3,22 +3,22 @@ on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
+permissions:
+  contents: write
 concurrency:
   group: rlchess
   cancel-in-progress: false
 jobs:
   run:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # pinned: the apt Stockfish build is part of the frozen eval protocol
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: true
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      # hot state: restored from the newest cache entry, saved under a fresh key every run
+      # hot state: newest cache entry; a miss falls back to KV inside the worker
       - uses: actions/cache/restore@v4
         with:
           path: |
@@ -27,12 +27,16 @@ jobs:
             buffer.jsonl
           key: rlchess-state-${{ github.run_id }}
           restore-keys: rlchess-state-
-      - run: sudo apt-get install -y -q stockfish
+      - run: |
+          sudo apt-get update -q && sudo apt-get install -y -q stockfish
+          echo /usr/games >> "$GITHUB_PATH"
+      - run: which stockfish && (echo uci | stockfish | head -1) && nproc && cat /proc/cpuinfo | grep -m1 'model name'
       - run: npm ci
       - run: npm run run
         env:
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       - uses: actions/cache/save@v4
         if: always()
         with:
@@ -41,11 +45,11 @@ jobs:
             weights.json
             buffer.jsonl
           key: rlchess-state-${{ github.run_id }}
-      # durable state: a commit every 8th run (~2 h); also keeps the schedule from being disabled after 60 idle days
+      # durable state lives in KV; this tiny daily commit only keeps GitHub from disabling the schedule after 60 idle days
       - run: |
-          test $(( $(node -p 'require("./state.json").run') % 8 )) -eq 0 || exit 0
+          test $(( $(node -p 'require("./state.json").run') % 96 )) -eq 0 || exit 0
           git config user.name rlchess-bot
           git config user.email rlchess-bot@users.noreply.github.com
-          git add state.json weights.json buffer.jsonl
+          git add state.json
           git commit -m "run $(node -p 'require("./state.json").run')" || exit 0
           git push

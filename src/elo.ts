@@ -17,3 +17,9 @@ export function promote(history: EvalEntry[], current: string): string {
   const i = TIERS.findIndex(t => t.name === current)
   return mean >= THRESHOLD && i + 1 < TIERS.length ? TIERS[i + 1].name : current
 }
+
+/** Mean score of the last 40 eval games against `tier` only; 0.5 when there are none yet. */
+export function rollingScore(history: EvalEntry[], tier: string): number {
+  const mine = history.filter(e => e.tier === tier).slice(-WINDOW)
+  return mine.length ? mine.reduce((s, e) => s + e.score, 0) / mine.length : 0.5
+}

@@ -8,9 +8,7 @@
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",
-    "@vercel/blob": "^2.2.0",
-    "chess.js": "^1.4.0",
-    "redis": "^5.11.0"
+    "chess.js": "^1.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

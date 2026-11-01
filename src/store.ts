@@ -1,30 +1,44 @@
-import { createClient } from 'redis'
-import { put } from '@vercel/blob'
-import { readFile } from 'node:fs/promises'
-
 export type Record3 = { w: number; d: number; l: number }
 export type RunSummary = { ts: string; run: number; tier: string; elo: number; score40: number; gamesTotal: number; loss: number; record: Record<string, Record3> }
 export type GameRecord = { ts: string; tier: string; kind: 'tier' | 'selfplay' | 'eval'; result: string; pgn: string }
+export type Kv = { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
 
-type RedisLike = Pick<ReturnType<typeof createClient>, 'hSet' | 'lPush' | 'lTrim'>
-const SNAPSHOT_EVERY = 96 // runs ≈ one day at a 15-minute cadence
+const METRICS_CAP = 20000, GAMES_CAP = 500, SNAPSHOT_EVERY = 96 // ≈ daily at a 15-minute cadence
 
-/** Push a run's summary + games to Redis (and PGNs / a daily weights snapshot to Blob). No-ops without credentials. */
-export async function publish(run: RunSummary, games: GameRecord[], deps: { redis?: RedisLike; weightsPath?: string } = {}) {
-  let redis = deps.redis, own: ReturnType<typeof createClient> | undefined
-  if (!redis) {
-    if (!process.env.REDIS_URL) { console.warn('publish skipped (no REDIS_URL)'); return }
-    own = createClient({ url: process.env.REDIS_URL }); await own.connect(); redis = own
+/** Cloudflare KV over its REST API — no SDK. Needs CF_ACCOUNT_ID, CF_KV_NAMESPACE_ID, CF_API_TOKEN. */
+export function cloudflareKv(): Kv | null {
+  const { CF_ACCOUNT_ID: acct, CF_KV_NAMESPACE_ID: ns, CF_API_TOKEN: token } = process.env
+  if (!token) return null
+  const url = (key: string) => `https://api.cloudflare.com/client/v4/accounts/${acct}/storage/kv/namespaces/${ns}/values/${encodeURIComponent(key)}`
+  const headers = { Authorization: `Bearer ${token}` }
+  return {
+    async get(key) { const r = await fetch(url(key), { headers }); return r.ok ? r.text() : null },
+    async put(key, value) { const r = await fetch(url(key), { method: 'PUT', headers, body: value }); if (!r.ok) throw new Error(`kv put ${key}: ${r.status}`) },
   }
-  const { record, ...flat } = run
-  await redis.hSet('rlchess:state', { ...Object.fromEntries(Object.entries(flat).map(([k, v]) => [k, String(v)])), record: JSON.stringify(record) })
-  await redis.lPush('rlchess:metrics', JSON.stringify({ ts: run.ts, run: run.run, tier: run.tier, elo: run.elo, score40: run.score40, gamesTotal: run.gamesTotal, loss: run.loss }))
-  await redis.lTrim('rlchess:metrics', 0, 19999)
-  if (games.length) { await redis.lPush('rlchess:games', games.map(g => JSON.stringify(g))); await redis.lTrim('rlchess:games', 0, 499) }
-  await own?.quit()
+}
 
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return
-  const day = run.ts.slice(0, 10), opts = { access: 'public' as const, addRandomSuffix: false, allowOverwrite: true }
-  await put(`rlchess/games/${day}/run-${run.run}.pgn`, games.map(g => g.pgn).join('\n\n'), opts)
-  if (deps.weightsPath && run.run % SNAPSHOT_EVERY === 0) await put(`rlchess/weights/${day}.json`, await readFile(deps.weightsPath, 'utf8'), opts)
+const json = async <T>(kv: Kv, key: string, fallback: T): Promise<T> => { const v = await kv.get(key); return v ? JSON.parse(v) : fallback }
+
+/** Publish a run: state, metrics, games (for the page), the PGN archive, and the live weights/buffer (durable state). */
+export async function publish(run: RunSummary, games: GameRecord[], files: { weights: string; buffer: string; kv?: Kv }) {
+  const kv = files.kv ?? cloudflareKv()
+  if (!kv) { console.warn('publish skipped (no CF_API_TOKEN)'); return }
+  const metrics = await json<object[]>(kv, 'metrics', []), { record, ...point } = run
+  const prev = await json<GameRecord[]>(kv, 'games', [])
+  await kv.put('state', JSON.stringify(run))
+  await kv.put('metrics', JSON.stringify([...metrics, point].slice(-METRICS_CAP)))
+  await kv.put('games', JSON.stringify([...games, ...prev].slice(0, GAMES_CAP)))
+  const day = run.ts.slice(0, 10)
+  await kv.put(`archive/${day}/run-${run.run}.pgn`, games.map(g => g.pgn).join('\n\n'))
+  await kv.put('weights', files.weights); await kv.put('buffer', files.buffer)
+  if (run.run % SNAPSHOT_EVERY === 0) await kv.put(`weights/${day}.json`, files.weights)
+}
+
+/** Pull durable state from KV when the local files are missing (cache miss). Returns false if there is nothing yet. */
+export async function restore(files: Record<string, string>, kv: Kv | null = cloudflareKv()): Promise<boolean> {
+  if (!kv) return false
+  const { writeFileSync } = await import('node:fs')
+  let any = false
+  for (const [key, path] of Object.entries(files)) { const v = await kv.get(key); if (v) { writeFileSync(path, v); any = true } }
+  return any
 }

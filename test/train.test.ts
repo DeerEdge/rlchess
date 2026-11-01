@@ -14,3 +14,7 @@ test('one epoch on a repeated sample lowers the loss', async () => {
   assert.ok(Number.isFinite(a.loss))
   assert.ok(b.loss < a.loss, `${b.loss} !< ${a.loss}`)
 })
+
+test('an empty sample set trains nothing and reports loss 0', async () => {
+  assert.deepEqual(await trainEpoch(createNet(), [], { batch: 32, lr: 1e-3 }), { loss: 0 })
+})

@@ -20,6 +20,18 @@ for (const [name, bin] of [['lozza', 'node'], ['sunfish', 'python3'], ['stockfis
   })
 }
 
+test('a slow engine times out and is dead afterwards, never answering a later position', async () => {
+  const slow = await uciPlayer({ name: 'slow', rating: 0, cmd: ['node', '-e', 'process.stdin.on("data",d=>{if(/^uci/m.test(d))console.log("uciok");if(/isready/.test(d))console.log("readyok");if(/^go/m.test(d))setTimeout(()=>console.log("bestmove e2e4"),1500)})'] }, { movetime: 100, depth: 8, timeoutMs: 1000 })
+  try {
+    await assert.rejects(slow(new Chess()), EngineTimeout)
+    const t = Date.now(); await assert.rejects(slow(new Chess()), EngineTimeout); assert.ok(Date.now() - t < 500, 'dead engine must reject immediately')
+  } finally { slow.quit() }
+})
+
+test('a missing binary rejects instead of crashing', async () => {
+  await assert.rejects(uciPlayer({ name: 'nope', rating: 0, cmd: ['definitely-not-a-real-binary-xyz'] }, { movetime: 100, depth: 8, timeoutMs: 1000 }), EngineTimeout)
+})
+
 test('a silent engine rejects with EngineTimeout', async () => {
   const p = await uciPlayer({ name: 'mute', rating: 0, cmd: ['node', '-e', 'process.stdin.on("data",d=>{if(/^uci/m.test(d))console.log("uciok");if(/isready/.test(d))console.log("readyok")})'] }, { movetime: 100, depth: 8, timeoutMs: 1000 })
   try { await assert.rejects(p(new Chess()), EngineTimeout) } finally { p.quit() }
