@@ -18,13 +18,32 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # hot state: restored from the newest cache entry, saved under a fresh key every run
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            state.json
+            weights.json
+            buffer.jsonl
+          key: rlchess-state-${{ github.run_id }}
+          restore-keys: rlchess-state-
       - run: sudo apt-get install -y -q stockfish
       - run: npm ci
       - run: npm run run
         env:
           REDIS_URL: ${{ secrets.REDIS_URL }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            state.json
+            weights.json
+            buffer.jsonl
+          key: rlchess-state-${{ github.run_id }}
+      # durable state: a commit every 8th run (~2 h); also keeps the schedule from being disabled after 60 idle days
       - run: |
+          test $(( $(node -p 'require("./state.json").run') % 8 )) -eq 0 || exit 0
           git config user.name rlchess-bot
           git config user.email rlchess-bot@users.noreply.github.com
           git add state.json weights.json buffer.jsonl

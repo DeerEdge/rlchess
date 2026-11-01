@@ -42,13 +42,16 @@ export function legalPolicy(from: Float32Array, to: Float32Array, moves: string[
 export const uciMoves = (chess: Chess) =>
   chess.moves({ verbose: true }).filter(m => !m.promotion || m.promotion === 'q').map(m => m.from + m.to + (m.promotion ?? ''))
 
+/** Weights as JSON shapes + base64 float32 (~460 KB), not a float-per-token JSON array. */
 export async function saveWeights(net: tf.LayersModel, path: string) {
-  const ws = net.getWeights()
-  const data = await Promise.all(ws.map(w => w.data()))
-  await writeFile(path, JSON.stringify({ shapes: ws.map(w => w.shape), data: data.map(d => [...d]) }))
+  const ws = net.getWeights(), data = await Promise.all(ws.map(w => w.data() as Promise<Float32Array>))
+  const buf = Buffer.concat(data.map(d => Buffer.from(d.buffer, d.byteOffset, d.byteLength)))
+  await writeFile(path, JSON.stringify({ shapes: ws.map(w => w.shape), data: buf.toString('base64') }))
 }
 
 export async function loadWeights(net: tf.LayersModel, path: string) {
-  const { shapes, data } = JSON.parse(await readFile(path, 'utf8')) as { shapes: number[][]; data: number[][] }
-  net.setWeights(shapes.map((s, i) => tf.tensor(data[i], s)))
+  const { shapes, data } = JSON.parse(await readFile(path, 'utf8')) as { shapes: number[][]; data: string }
+  const all = new Float32Array(new Uint8Array(Buffer.from(data, 'base64')).buffer)
+  let off = 0
+  net.setWeights(shapes.map(s => { const n = s.reduce((a, b) => a * b, 1); const t = tf.tensor(all.slice(off, off + n), s); off += n; return t }))
 }

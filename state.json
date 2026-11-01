@@ -17,46 +17,14 @@
   {
    "tier": "random",
    "score": 0.5
-  },
-  {
-   "tier": "random",
-   "score": 0.5
-  },
-  {
-   "tier": "random",
-   "score": 1
-  },
-  {
-   "tier": "random",
-   "score": 1
-  },
-  {
-   "tier": "random",
-   "score": 0.5
-  },
-  {
-   "tier": "random",
-   "score": 0.5
-  },
-  {
-   "tier": "random",
-   "score": 0.5
-  },
-  {
-   "tier": "random",
-   "score": 1
-  },
-  {
-   "tier": "random",
-   "score": 0.5
   }
  ],
  "record": {
   "random": {
-   "w": 3,
-   "d": 9,
+   "w": 0,
+   "d": 4,
    "l": 0
   }
  },
- "gamesTotal": 22
+ "gamesTotal": 8
 }

@@ -11,7 +11,7 @@ A super tiny chess net (~86k params, dense MLP + MCTS) that learns in a loop tha
 5. promote to the next tier when the last 40 eval games average ≥ 0.55; never demote
 6. write the three files; publish metrics + games to Redis and PGNs (+ a daily weights snapshot) to Vercel Blob
 
-GitHub Actions runs this every 15 minutes (`.github/workflows/loop.yml`) and commits the three state files back, which is both the persistence and what keeps the schedule alive.
+GitHub Actions runs this every 15 minutes (`.github/workflows/loop.yml`). The three state files live in the Actions cache between runs and are committed every 8th run (~2 h) for durability — that commit is also what keeps the schedule from being disabled after 60 idle days.
 
 ## local
 
