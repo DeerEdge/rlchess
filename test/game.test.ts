@@ -28,6 +28,7 @@ test('the ply cap ends an unfinished game as a draw', async () => {
   const g = await playGame(shuffle, shuffle, { maxPlies: 6, record: false })
   const replay = new Chess(); replay.loadPgn(g.pgn)
   assert.equal(replay.history().length, 6)
+  assert.equal(g.plies, 6)
   assert.equal(g.result, '1/2-1/2')
 })
 

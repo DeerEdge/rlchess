@@ -1,11 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { publish, type RunSummary, type GameRecord } from '../src/store.ts'
-import { playMany, score } from '../src/worker.ts'
+import { playMany, score, trainingTier, rates } from '../src/worker.ts'
+import { TIERS } from '../src/encode.ts'
 import { EngineTimeout } from '../src/uci.ts'
 
-const run: RunSummary = { ts: '2026-10-31T00:00:00Z', run: 96, tier: 'random', elo: 400, score40: 0.5, gamesTotal: 8, loss: 1.2, record: { random: { w: 1, d: 0, l: 0 } } }
-const game: GameRecord = { ts: run.ts, tier: 'random', kind: 'eval', result: '1-0', pgn: '1. e4 *' }
+const run: RunSummary = { ts: '2026-10-31T00:00:00Z', run: 96, tier: 'random', elo: 400, score40: 0.5, win40: 0.3, draw40: 0.4, plies: 80, buffer: 1000, seconds: 300, gamesTotal: 8, loss: 1.2, record: { random: { w: 1, d: 0, l: 0 } } }
+const game: GameRecord = { ts: run.ts, tier: 'random', kind: 'eval', result: '1-0', pgn: '1. e4 *', agentWhite: true, plies: 1 }
 
 const fakeKv = () => {
   const store = new Map<string, string>()
@@ -60,4 +61,16 @@ test('restore pulls the worker files from kv and reports whether anything existe
   kv.store.set('worker-state', '{"run":3}')
   assert.equal(await restore({ 'worker-state': dir + '/state.json' }, kv), true)
   assert.equal(readFileSync(dir + '/state.json', 'utf8'), '{"run":3}')
+})
+
+test('training opponents are drawn from the tier below, the current tier and the tier above', () => {
+  const seen = new Set(Array.from({ length: 200 }, () => trainingTier('stockfish-3').name))
+  assert.deepEqual([...seen].sort(), ['stockfish-2', 'stockfish-3', 'stockfish-4'])
+  assert.deepEqual([...new Set(Array.from({ length: 100 }, () => trainingTier(TIERS[0].name).name))].sort(), [TIERS[0].name, TIERS[1].name], 'bottom of the ladder has no tier below')
+})
+
+test('rates summarise the last 40 eval games of the current tier', () => {
+  const h = [...Array(10).fill({ tier: 'x', score: 1 }), ...Array(20).fill({ tier: 'x', score: 0.5 }), ...Array(10).fill({ tier: 'x', score: 0 }), { tier: 'y', score: 1 }]
+  assert.deepEqual(rates(h, 'x'), { score40: 0.5, win40: 0.25, draw40: 0.5 })
+  assert.deepEqual(rates([], 'x'), { score40: 0.5, win40: 0, draw40: 0 })
 })

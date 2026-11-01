@@ -1,6 +1,6 @@
 export type Record3 = { w: number; d: number; l: number }
-export type RunSummary = { ts: string; run: number; tier: string; elo: number; score40: number; gamesTotal: number; loss: number; record: Record<string, Record3> }
-export type GameRecord = { ts: string; tier: string; kind: 'tier' | 'selfplay' | 'eval'; result: string; pgn: string }
+export type RunSummary = { ts: string; run: number; tier: string; elo: number; score40: number; win40: number; draw40: number; plies: number; buffer: number; seconds: number; gamesTotal: number; loss: number; record: Record<string, Record3> }
+export type GameRecord = { ts: string; tier: string; kind: 'tier' | 'selfplay' | 'eval'; result: string; pgn: string; agentWhite: boolean; plies: number }
 export type Kv = { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
 
 const METRICS_CAP = 20000, GAMES_CAP = 500, SNAPSHOT_EVERY = 96 // ≈ daily at a 15-minute cadence

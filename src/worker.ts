@@ -6,7 +6,7 @@ import { agentPlayer, playGame, type Player, type Result } from './game.ts'
 import { ReplayBuffer } from './buffer.ts'
 import { playerFor, EngineTimeout } from './uci.ts'
 import { trainEpoch } from './train.ts'
-import { elo, promote, rollingScore } from './elo.ts'
+import { elo, promote } from './elo.ts'
 import { publish, restore, type GameRecord, type Record3 } from './store.ts'
 import type { EvalEntry } from './elo.ts'
 
@@ -17,7 +17,7 @@ const TRAIN_SAMPLES = 4096, MAX_PLIES = 200, ENGINE = { movetime: 100, depth: 8 
 const FILES = { state: 'state.json', weights: 'weights.json', buffer: 'buffer.jsonl' }
 
 type State = { run: number; tier: string; evalHistory: EvalEntry[]; record: Record<string, Record3>; gamesTotal: number }
-type Game = Awaited<ReturnType<typeof playGame>> & { agentWhite: boolean }
+type Game = Awaited<ReturnType<typeof playGame>> & { agentWhite: boolean; against?: string }
 
 /** Play up to n games; a game whose engine goes silent is dropped, and no new game starts after `deadline`. */
 export async function playMany(n: number, factory: (i: number) => Promise<Game>, deadline = Infinity): Promise<Game[]> {
@@ -30,6 +30,20 @@ export async function playMany(n: number, factory: (i: number) => Promise<Game>,
 
 export const score = (g: { result: Result; agentWhite: boolean }) => g.result === '1/2-1/2' ? 0.5 : (g.result === '1-0') === g.agentWhite ? 1 : 0
 
+/** Training opponent: the current tier or one of its neighbours, so the net sees a spread of strengths. */
+export function trainingTier(current: string) {
+  const i = TIERS.findIndex(t => t.name === current)
+  const choices = [i - 1, i, i + 1].filter(j => j >= 0 && j < TIERS.length)
+  return TIERS[choices[Math.floor(Math.random() * choices.length)]]
+}
+
+/** Score / win / draw rates over the last 40 eval games vs `tier`; neutral when there are none. */
+export function rates(history: EvalEntry[], tier: string) {
+  const last = history.filter(e => e.tier === tier).slice(-40), n = last.length
+  const count = (v: number) => last.filter(e => e.score === v).length / n
+  return n ? { score40: last.reduce((s, e) => s + e.score, 0) / n, win40: count(1), draw40: count(0.5) } : { score40: 0.5, win40: 0, draw40: 0 }
+}
+
 async function main() {
   const t0 = Date.now()
   if (!existsSync(FILES.state) && await restore({ 'worker-state': FILES.state, weights: FILES.weights, buffer: FILES.buffer })) console.log('restored state from kv')
@@ -39,14 +53,15 @@ async function main() {
   const buffer = ReplayBuffer.load(FILES.buffer)
   const explore = agentPlayer(net, SIMS, { noise: true }), exploit = agentPlayer(net, SIMS, { temperaturePlies: EVAL_TEMPERATURE_PLIES })
   // one engine process per game: a timed-out engine is killed, so it must never be shared across games
-  const vs = async (agent: Player, i: number): Promise<Game> => {
-    const opp = await playerFor(tier, ENGINE), agentWhite = i % 2 === 0
-    try { return { ...await playGame(agentWhite ? agent : opp, agentWhite ? opp : agent, { maxPlies: MAX_PLIES, record: true }), agentWhite } } finally { opp.quit() }
+  const vs = async (agent: Player, i: number, against = tier): Promise<Game> => {
+    const opp = await playerFor(against, ENGINE), agentWhite = i % 2 === 0
+    try { return { ...await playGame(agentWhite ? agent : opp, agentWhite ? opp : agent, { maxPlies: MAX_PLIES, record: true }), agentWhite, against: against.name } } finally { opp.quit() }
   }
-  const games: GameRecord[] = [], log = (kind: GameRecord['kind'], g: Game) => games.push({ ts, tier: tier.name, kind, result: g.result, pgn: g.pgn })
+  const games: GameRecord[] = []
+  const log = (kind: GameRecord['kind'], g: Game) => games.push({ ts, tier: g.against ?? tier.name, kind, result: g.result, pgn: g.pgn, agentWhite: g.agentWhite, plies: g.plies })
 
   const deadline = t0 + BUDGET_MS
-  const tierGames = await playMany(Math.ceil(GAMES / 2), i => vs(explore, i), deadline)
+  const tierGames = await playMany(Math.ceil(GAMES / 2), i => vs(explore, i, trainingTier(tier.name)), deadline)
   const selfGames = await playMany(Math.floor(GAMES / 2), async () => ({ ...await playGame(explore, explore, { maxPlies: MAX_PLIES, record: true }), agentWhite: true }), deadline)
   tierGames.forEach(g => log('tier', g)); selfGames.forEach(g => log('selfplay', g))
   buffer.append([...tierGames, ...selfGames].flatMap(g => g.samples))
@@ -57,8 +72,10 @@ async function main() {
   const rec = (state.record[tier.name] ??= { w: 0, d: 0, l: 0 })
   for (const g of evalGames) { const s = score(g); state.evalHistory.push({ tier: tier.name, score: s }); rec[s === 1 ? 'w' : s === 0 ? 'l' : 'd']++; log('eval', g) }
 
-  const score40 = rollingScore(state.evalHistory, tier.name)
-  const summary = { ts, run: ++state.run, tier: tier.name, elo: Math.round(elo(score40, tier.rating)), score40: +score40.toFixed(3), gamesTotal: (state.gamesTotal += games.length), loss: +loss.toFixed(4), record: state.record }
+  const { score40, win40, draw40 } = rates(state.evalHistory, tier.name)
+  const summary = { ts, run: ++state.run, tier: tier.name, elo: Math.round(elo(score40, tier.rating)), score40: +score40.toFixed(3), win40: +win40.toFixed(3), draw40: +draw40.toFixed(3),
+    plies: Math.round(games.reduce((s, g) => s + g.plies, 0) / Math.max(1, games.length)), buffer: buffer.samples.length, seconds: Math.round((Date.now() - t0) / 1000),
+    gamesTotal: (state.gamesTotal += games.length), loss: +loss.toFixed(4), record: state.record }
   state.tier = promote(state.evalHistory, state.tier)
   state.evalHistory = state.evalHistory.slice(-40)
   writeFileSync(FILES.state, JSON.stringify(state, null, 1)); await saveWeights(net, FILES.weights); buffer.save(FILES.buffer)

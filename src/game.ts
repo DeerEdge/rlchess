@@ -29,5 +29,5 @@ export async function playGame(white: Player, black: Player, opts: { maxPlies: n
   const result: Result = winner === 'w' ? '1-0' : winner === 'b' ? '0-1' : '1/2-1/2'
   chess.setHeader('Result', result); chess.setHeader('Date', new Date().toISOString().slice(0, 10))
   const samples: Sample[] = taken.map(t => ({ fen: t.fen, pi: t.pi, z: winner ? (t.mover === winner ? 1 : -1) : 0 }))
-  return { pgn: chess.pgn(), result, samples }
+  return { pgn: chess.pgn(), result, samples, plies: chess.history().length }
 }
