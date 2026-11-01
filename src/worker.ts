@@ -2,19 +2,19 @@ import { existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from
 import { fileURLToPath } from 'node:url'
 import { TIERS } from './encode.ts'
 import { createNet, loadWeights, saveWeights } from './net.ts'
-import { agentPlayer, playGame, type Player, type Result } from './game.ts'
+import { agentPlayer, playGame, type Player, type Result, type Sample } from './game.ts'
 import { ReplayBuffer } from './buffer.ts'
 import { playerFor, EngineTimeout } from './uci.ts'
 import { trainEpoch } from './train.ts'
 import { update, promote } from './elo.ts'
-import { publish, restore, liveReporter, cloudflareKv, type GameRecord, type Record3 } from './store.ts'
+import { publish, restore, liveReporter, cloudflareKv, type GameRecord, type Record3, type Kv } from './store.ts'
 import { Chess } from 'chess.js'
 import type { EvalEntry } from './elo.ts'
 
 const env = (k: string, d: number) => +(process.env[k] ?? d)
 const GAMES = env('RLCHESS_GAMES', 32), SIMS = env('RLCHESS_SIMS', 40), EVAL_GAMES = env('RLCHESS_EVAL', 10)
 const BUDGET_MS = env('RLCHESS_BUDGET_MS', 5 * 60e3) // stop starting training games after this; eval always runs
-const LIVE_MAX = { play: 1, train: 3 } // live snapshots per process (one per finished engine game): 6 publish + 4 shards + 3 ≈ 13 writes × 72 runs ≈ 940/day, under the free KV plan's 1000
+const LIVE_MAX = { play: 1, extra: 1, train: 3 } // live snapshots per process (one per finished engine game): 6 publish + 4 shards + 3 ≈ 13 writes × 72 runs ≈ 940/day, under the free KV plan's 1000
 const TRAIN_SAMPLES = 16384, MAX_PLIES = 200, ENGINE = { movetime: 100, depth: 8 }, EVAL_TEMPERATURE_PLIES = 4
 const ANNOTATOR = { name: 'stockfish', rating: 0, cmd: ['stockfish'] }, ANNOTATE_PLIES = 100 // the page replays at most 100 plies
 const FILES = { state: 'state.json', weights: 'weights.json', buffer: 'buffer.jsonl' }
@@ -51,6 +51,16 @@ export async function annotate(games: GameRecord[], evaluate: (fen: string) => P
   }
 }
 
+/** Sample sets uploaded by extra (button-spawned) runs: merged and deleted. */
+export async function collectExtra(kv: Kv | null): Promise<{ games: GameRecord[]; samples: Sample[] }> {
+  const out = { games: [] as GameRecord[], samples: [] as Sample[] }
+  for (const key of kv ? await kv.list('samples/') : []) {
+    const set = JSON.parse(await kv!.get(key) ?? '{"games":[],"samples":[]}')
+    out.games.push(...set.games); out.samples.push(...set.samples); await kv!.delete(key)
+  }
+  return out
+}
+
 /** Score / win / draw rates over the last 40 eval games vs `tier`; neutral when there are none. */
 export function rates(history: EvalEntry[], tier: string) {
   const last = history.filter(e => e.tier === tier).slice(-40), n = last.length
@@ -60,11 +70,11 @@ export function rates(history: EvalEntry[], tier: string) {
 
 const MIN_GAP_MS = 10 * 60e3 // a cron run landing right after a self-dispatched one is skipped
 
-/** `play <shard>`: one process of game generation, writes shard-<n>.json. `train`: merges the shards, trains, evaluates, publishes.
- *  The workflow runs 4 play shards in parallel (one per runner core), then train. */
-async function main(mode: 'play' | 'train', shard = '0') {
-  const t0 = Date.now()
-  const last = JSON.parse(await cloudflareKv()?.get('state') ?? 'null')?.ts
+/** `play <shard>`: one process of game generation, writes shard-<n>.json. `train`: merges the shards (and any uploaded extra sets), trains, evaluates, publishes.
+ *  `extra <shard>`: a button-spawned run — same as play, but uploads its set to KV for the next trainer. The workflow runs 4 shards in parallel, one per core. */
+async function main(mode: 'play' | 'extra' | 'train', shard = '0') {
+  const t0 = Date.now(), kv = cloudflareKv()
+  const last = mode === 'extra' ? null : JSON.parse(await kv?.get('state') ?? 'null')?.ts
   if (last && t0 - Date.parse(last) < MIN_GAP_MS) return console.log(`last run ${Math.round((t0 - Date.parse(last)) / 60e3)} min ago, skipping`)
   if (!existsSync(FILES.state) && await restore({ 'worker-state': FILES.state, weights: FILES.weights, buffer: FILES.buffer })) console.log('restored state from kv')
   const state: State = existsSync(FILES.state) ? JSON.parse(readFileSync(FILES.state, 'utf8')) : { run: 0, tier: TIERS[0].name, elo: TIERS[0].rating, evalHistory: [], record: {}, gamesTotal: 0 }
@@ -84,17 +94,19 @@ async function main(mode: 'play' | 'train', shard = '0') {
     } finally { opp.quit() }
   }
 
-  if (mode === 'play') {
+  if (mode !== 'train') {
     const explore = agentPlayer(net, SIMS, { noise: true }), deadline = t0 + BUDGET_MS
     const tierGames = await playMany(Math.ceil(GAMES / 2), i => vs(explore, i, trainingTier(tier.name)), deadline)
     const selfGames = await playMany(Math.floor(GAMES / 2), async () => ({ ...await playGame(explore, explore, { maxPlies: MAX_PLIES, record: true }), agentWhite: true }), deadline)
     tierGames.forEach(g => log('tier', g)); selfGames.forEach(g => log('selfplay', g))
-    writeFileSync(shardFile(shard), JSON.stringify({ games, samples: [...tierGames, ...selfGames].flatMap(g => g.samples) }))
-    return console.log(`shard ${shard}: ${games.length} games ${Math.round((Date.now() - t0) / 1000)}s`)
+    const set = JSON.stringify({ games, samples: [...tierGames, ...selfGames].flatMap(g => g.samples) })
+    if (mode === 'extra') await kv?.put(`samples/${process.env.GITHUB_RUN_ID ?? t0}-${shard}`, set); else writeFileSync(shardFile(shard), set)
+    return console.log(`${mode} shard ${shard}: ${games.length} games ${Math.round((Date.now() - t0) / 1000)}s`)
   }
 
   const buffer = ReplayBuffer.load(FILES.buffer), shards = readdirSync('.').filter(f => /^shard-\d+\.json$/.test(f))
   for (const f of shards) { const { games: gs, samples } = JSON.parse(readFileSync(f, 'utf8')); games.push(...gs); buffer.append(samples); unlinkSync(f) }
+  const extra = await collectExtra(kv); games.push(...extra.games); buffer.append(extra.samples)
   const subset = [...buffer.samples].sort(() => Math.random() - 0.5).slice(0, TRAIN_SAMPLES) // ponytail: good-enough shuffle
   const { loss } = await trainEpoch(net, subset, { batch: 256, lr: 1e-3, onBatch: (batch, batches, l) => live({ phase: 'train', run, tier: tier.name, batch, batches, loss: +l.toFixed(4) }) })
 
@@ -117,7 +129,7 @@ async function main(mode: 'play' | 'train', shard = '0') {
   state.evalHistory = state.evalHistory.slice(-40)
   writeFileSync(FILES.state, JSON.stringify(state, null, 1)); await saveWeights(net, FILES.weights); buffer.save(FILES.buffer)
   await publish(summary, games, { weights: readFileSync(FILES.weights, 'utf8'), buffer: readFileSync(FILES.buffer, 'utf8'), state: readFileSync(FILES.state, 'utf8') })
-  console.log(`run ${summary.run} tier ${tier.name}→${state.tier} score40 ${summary.score40} elo ${summary.elo} loss ${summary.loss} games ${games.length} (${shards.length} shards) buffer ${buffer.samples.length} ${Math.round((Date.now() - t0) / 1000)}s`)
+  console.log(`run ${summary.run} tier ${tier.name}→${state.tier} score40 ${summary.score40} elo ${summary.elo} loss ${summary.loss} games ${games.length} (${shards.length} shards + ${extra.games.length} extra) buffer ${buffer.samples.length} ${Math.round((Date.now() - t0) / 1000)}s`)
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main(process.argv[2] === 'train' ? 'train' : 'play', process.argv[3]).catch(e => { console.error(e); process.exit(1) })
+if (process.argv[1] === fileURLToPath(import.meta.url)) main((['train', 'extra'].find(m => m === process.argv[2]) ?? 'play') as 'play' | 'extra' | 'train', process.argv[3]).catch(e => { console.error(e); process.exit(1) })

@@ -3,7 +3,7 @@ export type RunSummary = { ts: string; run: number; tier: string; elo: number; s
 export type GameRecord = { ts: string; tier: string; kind: 'tier' | 'selfplay' | 'eval'; result: string; pgn: string; agentWhite: boolean; plies: number; evals?: number[]; elo?: number; delta?: number }
 /** What the worker just did: the last finished engine game, or training progress. The page polls this while a run is in flight. */
 export type Live = { phase: 'play' | 'train' | 'eval'; run?: number; tier?: string; game?: number; games?: number; against?: string; agentWhite?: boolean; pgn?: string; result?: string; batch?: number; batches?: number; loss?: number }
-export type Kv = { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
+export type Kv = { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void>; list(prefix: string): Promise<string[]>; delete(key: string): Promise<void> }
 
 const METRICS_CAP = 20000, GAMES_CAP = 500, SNAPSHOT_EVERY = 72 // ≈ daily at a 20-minute cadence
 
@@ -11,11 +11,13 @@ const METRICS_CAP = 20000, GAMES_CAP = 500, SNAPSHOT_EVERY = 72 // ≈ daily at 
 export function cloudflareKv(): Kv | null {
   const { CF_ACCOUNT_ID: acct, CF_KV_NAMESPACE_ID: ns, CF_API_TOKEN: token } = process.env
   if (!token) return null
-  const url = (key: string) => `https://api.cloudflare.com/client/v4/accounts/${acct}/storage/kv/namespaces/${ns}/values/${encodeURIComponent(key)}`
+  const base = `https://api.cloudflare.com/client/v4/accounts/${acct}/storage/kv/namespaces/${ns}`, url = (key: string) => `${base}/values/${encodeURIComponent(key)}`
   const headers = { Authorization: `Bearer ${token}` }
   return {
     async get(key) { const r = await fetch(url(key), { headers }); return r.ok ? r.text() : null },
     async put(key, value) { const r = await fetch(url(key), { method: 'PUT', headers, body: value }); if (!r.ok) throw new Error(`kv put ${key}: ${r.status}`) },
+    async list(prefix) { const r = await fetch(`${base}/keys?prefix=${encodeURIComponent(prefix)}`, { headers }); return r.ok ? ((await r.json()).result as { name: string }[]).map(k => k.name) : [] },
+    async delete(key) { await fetch(url(key), { method: 'DELETE', headers }) },
   }
 }
 

@@ -3,11 +3,18 @@ on:
   schedule:
     - cron: "*/20 * * * *"   # ~72 runs/day: fits the free KV write budget (1000/day) with live snapshots
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "full = the chained training run; extra = a game-generation run whose samples feed the next trainer (the page's button)"
+        type: choice
+        options: [full, extra]
+        default: full
+run-name: ${{ inputs.mode || 'full' }}
 permissions:
   contents: write
   actions: write   # self-dispatch
 concurrency:
-  group: rlchess
+  group: ${{ inputs.mode == 'extra' && format('extra-{0}', github.run_id) || 'rlchess' }}   # extra runs may overlap; the trainer may not
   cancel-in-progress: false
 jobs:
   run:
@@ -34,8 +41,10 @@ jobs:
           echo /usr/games >> "$GITHUB_PATH"
       - run: which stockfish && (echo uci | stockfish | head -1) && nproc && cat /proc/cpuinfo | grep -m1 'model name'
       - run: npm ci
-      # four game-generation shards, one per core, then one trainer merges them
+      # four game-generation shards, one per core, then one trainer merges them (extra runs only play, and upload)
       - run: |
+          mode=${{ inputs.mode || 'full' }}
+          if [ "$mode" = extra ]; then for i in 0 1 2 3; do npm run extra -- $i & done; wait; exit 0; fi
           for i in 0 1 2 3; do npm run play -- $i & done; wait
           npm run train
         env:
@@ -43,7 +52,7 @@ jobs:
           CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       - uses: actions/cache/save@v4
-        if: always()
+        if: always() && inputs.mode != 'extra'
         with:
           path: |
             state.json
@@ -51,7 +60,8 @@ jobs:
             buffer.jsonl
           key: rlchess-state-v3-${{ github.run_id }}
       # durable state lives in KV; this tiny daily commit only keeps GitHub from disabling the schedule after 60 idle days
-      - run: |
+      - if: inputs.mode != 'extra'
+        run: |
           test -f state.json && test $(( $(node -p 'require("./state.json").run') % 72 )) -eq 0 || exit 0
           git config user.name rlchess-bot
           git config user.email rlchess-bot@users.noreply.github.com
@@ -59,7 +69,7 @@ jobs:
           git commit -m "run $(node -p 'require("./state.json").run')" || exit 0
           git push
       # GitHub's cron is best-effort (late or skipped for long stretches), so each run schedules the next one itself; the cron is only a backstop
-      - if: always()
+      - if: always() && inputs.mode != 'extra'
         run: |
           sleep $(( 1200 - ($(date +%s) - START) > 0 ? 1200 - ($(date +%s) - START) : 0 ))
           gh workflow run loop.yml --ref main
