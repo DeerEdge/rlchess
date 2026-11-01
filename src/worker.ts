@@ -7,7 +7,7 @@ import { ReplayBuffer } from './buffer.ts'
 import { playerFor, EngineTimeout } from './uci.ts'
 import { trainEpoch } from './train.ts'
 import { update, promote } from './elo.ts'
-import { publish, restore, liveReporter, type GameRecord, type Record3 } from './store.ts'
+import { publish, restore, liveReporter, cloudflareKv, type GameRecord, type Record3 } from './store.ts'
 import { Chess } from 'chess.js'
 import type { EvalEntry } from './elo.ts'
 
@@ -57,8 +57,12 @@ export function rates(history: EvalEntry[], tier: string) {
   return n ? { score40: last.reduce((s, e) => s + e.score, 0) / n, win40: count(1), draw40: count(0.5) } : { score40: 0.5, win40: 0, draw40: 0 }
 }
 
+const MIN_GAP_MS = 10 * 60e3 // a cron run landing right after a self-dispatched one is skipped
+
 async function main() {
   const t0 = Date.now()
+  const last = JSON.parse(await cloudflareKv()?.get('state') ?? 'null')?.ts
+  if (last && t0 - Date.parse(last) < MIN_GAP_MS) return console.log(`last run ${Math.round((t0 - Date.parse(last)) / 60e3)} min ago, skipping`)
   if (!existsSync(FILES.state) && await restore({ 'worker-state': FILES.state, weights: FILES.weights, buffer: FILES.buffer })) console.log('restored state from kv')
   const state: State = existsSync(FILES.state) ? JSON.parse(readFileSync(FILES.state, 'utf8')) : { run: 0, tier: TIERS[0].name, elo: TIERS[0].rating, evalHistory: [], record: {}, gamesTotal: 0 }
   state.elo ??= TIERS[0].rating // states written before per-game Elo
