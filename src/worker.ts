@@ -16,7 +16,7 @@ const GAMES = env('RLCHESS_GAMES', 32), SIMS = env('RLCHESS_SIMS', 40), EVAL_GAM
 const BUDGET_MS = env('RLCHESS_BUDGET_MS', 3.5 * 60e3) // per play cycle: stop starting games after this
 const LIVE_MAX = { play: 1, train: 3 } // live snapshots per process (one per finished engine game): 6 publish + 4 shards + 3 ≈ 13 writes × 72 runs ≈ 940/day, under the free KV plan's 1000
 const TRAIN_SAMPLES = 32768, MAX_PLIES = 200, ENGINE = { movetime: 100, depth: 8 }, EVAL_TEMPERATURE_PLIES = 4
-const ANNOTATOR = { name: 'stockfish', rating: 0, cmd: ['stockfish'] }, ANNOTATE_PLIES = 100 // the page replays at most 100 plies
+const ANNOTATOR = { name: 'stockfish', rating: 0, cmd: ['stockfish'] }, ANNOTATE_PLIES = 100, ANNOTATE_GAMES = 16 // eval bars for the games the page shows; it replays at most 100 plies
 const FILES = { state: 'state.json', weights: 'weights.json', buffer: 'buffer.jsonl' }
 const shardFile = (i: number | string) => `shard-${i}.json`
 
@@ -114,7 +114,7 @@ async function main(mode: 'play' | 'train', shard = '0') {
     log('eval', g, { elo: Math.round(state.elo), delta: Math.round(state.elo - before) })
   }
 
-  try { const sf = await playerFor(ANNOTATOR, ENGINE); try { await annotate(games, sf.evaluate) } finally { sf.quit() } } catch (e) { console.warn(`annotate: ${(e as Error).message}`) }
+  try { const sf = await playerFor(ANNOTATOR, ENGINE); try { await annotate(games.slice(0, ANNOTATE_GAMES), sf.evaluate) } finally { sf.quit() } } catch (e) { console.warn(`annotate: ${(e as Error).message}`) }
 
   const { score40, win40, draw40 } = rates(state.evalHistory, tier.name)
   const summary = { ts, run: ++state.run, tier: tier.name, elo: Math.round(state.elo), score40: +score40.toFixed(3), win40: +win40.toFixed(3), draw40: +draw40.toFixed(3),
