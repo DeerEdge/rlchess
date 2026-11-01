@@ -7,7 +7,9 @@
     "restore": "tsx src/worker.ts restore",
     "play": "tsx src/worker.ts play",
     "train": "tsx src/worker.ts train",
-    "run": "npm run play -- 0 && npm run train"
+    "eval": "tsx src/worker.ts eval",
+    "publish": "tsx src/worker.ts publish",
+    "run": "npm run restore && npm run play && npm run train && npm run eval && npm run publish"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",

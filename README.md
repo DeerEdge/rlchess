@@ -1,17 +1,19 @@
 # rlchess
 
-A super tiny chess net (~86k params, dense MLP + MCTS) that learns in a loop that never stops, measured against a fixed roster of open-source engines. Progress is shown on [dheerajvislawath.com/blog/rlchess](https://dheerajvislawath.com/blog/rlchess).
+A small chess net (142k params, conv tower + MCTS) that learns in a loop that never stops, measured against a fixed ladder of engines. Progress is shown on [dheerajvislawath.com/rlchess](https://dheerajvislawath.com/rlchess).
 
-## one run (`npm run run`)
+## one run (`.github/workflows/loop.yml`, every ~20 minutes; each run dispatches the next)
 
-1. load `state.json`, `weights.json`, `buffer.jsonl`
-2. play `RLCHESS_GAMES` training games (half vs the current tier, half self-play, Dirichlet noise, `RLCHESS_SIMS` MCTS sims/move)
-3. one training epoch over the replay buffer (last 20k positions)
-4. `RLCHESS_EVAL` eval games vs the current tier — the **frozen protocol**: alternating colours, agent at full sims with temperature 1 for the first 4 plies then greedy (so the 10 games aren't the same game), engine at `movetime 100` / `depth 8`, 200-ply cap = draw
-5. promote to the next tier when the last 40 eval games average ≥ 0.55; never demote
-6. write the three files; publish state, metrics, games and the live weights/buffer to Cloudflare KV (+ a daily weights snapshot)
+`src/worker.ts` has one mode per step; four shards run in parallel, one per runner core.
 
-GitHub Actions runs this every 20 minutes (each run dispatches the next; no cron): four `play` shards in parallel (one per runner core), then one `train` (`.github/workflows/loop.yml`). Training games stop starting after `RLCHESS_BUDGET_MS` (5 min) so a run fits the job. Hot state rides the Actions cache; durable state is KV (a cache miss restores from it).
+1. **restore** — on an Actions-cache miss, pull state, weights and the replay buffer from Cloudflare KV
+2. **play** ×4, then **train** — three times over:
+   - play: games for ~3.5 min, half vs a pool (the rung below, the current rung, the rung above, Stockfish skill 3/8/14/20 as teachers), half self-play, with Dirichlet noise and `RLCHESS_SIMS` simulations per move. Policy targets are the search's visit counts for the agent's moves and the engine's move (one-hot over legal moves) for engine moves; value targets are Stockfish depth-8 evals, `tanh(cp/400)`
+   - train: merge the shards into the 60k replay buffer, one Adam pass (lr 1e-3, batch 256) over 32k samples, loss `−Σ π log p + (v* − v)²`
+3. **eval** ×4 — `RLCHESS_EVAL` (24) rated games vs the current rung, the **frozen protocol**: alternating colours, temperature 1 for 4 plies then greedy, engines at `movetime 100` / `depth 8`, 200-ply cap = draw; each game gets per-ply Stockfish evals
+4. **publish** — standard Elo (K = 32) per rated game against the rung's fixed rating; promote when the last 40 rated games score ≥ 0.55, never demote; average centipawn loss of the agent's moves as a direct strength signal; write state, metrics, games, weights and buffer to KV
+
+Hot state rides the Actions cache; durable state is KV (6 writes per run, inside the free plan).
 
 ## local
 

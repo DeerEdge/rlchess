@@ -34,14 +34,15 @@ jobs:
           echo /usr/games >> "$GITHUB_PATH"
       - run: which stockfish && (echo uci | stockfish | head -1) && nproc && cat /proc/cpuinfo | grep -m1 'model name'
       - run: npm ci
-      # three cycles of: four game-generation shards (one per core), then one trainer merges them; then the final train + eval + publish
+      # restore → 3 × (4 play shards in parallel, one per core → train) → 4 eval shards in parallel → publish
       - run: |
           npm run restore
           for c in 1 2 3; do
             for i in 0 1 2 3; do npm run play -- $i & done; wait
-            npm run train -- cycle
+            npm run train
           done
-          npm run train
+          for i in 0 1 2 3; do npm run eval -- $i & done; wait
+          npm run publish
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}

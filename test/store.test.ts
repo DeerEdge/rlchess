@@ -7,7 +7,7 @@ import { playMany, score, trainingTier, rates } from '../src/worker.ts'
 import { TIERS } from '../src/encode.ts'
 import { EngineTimeout } from '../src/uci.ts'
 
-const run: RunSummary = { ts: '2026-10-31T00:00:00Z', run: 72, tier: 'random', elo: 400, score40: 0.5, win40: 0.3, draw40: 0.4, plies: 80, buffer: 1000, seconds: 300, gamesTotal: 8, loss: 1.2, record: { random: { w: 1, d: 0, l: 0 } } }
+const run: RunSummary = { ts: '2026-10-31T00:00:00Z', run: 72, tier: 'random', elo: 400, score40: 0.5, win40: 0.3, draw40: 0.4, acpl: 120, plies: 80, buffer: 1000, seconds: 300, gamesTotal: 8, loss: 1.2, record: { random: { w: 1, d: 0, l: 0 } } }
 const game: GameRecord = { ts: run.ts, tier: 'random', kind: 'eval', result: '1-0', pgn: '1. e4 *', agentWhite: true, plies: 1 }
 
 const fakeKv = () => {
@@ -64,10 +64,20 @@ test('restore pulls the worker files from kv and reports whether anything existe
   assert.equal(readFileSync(dir + '/state.json', 'utf8'), '{"run":3}'); assert.equal(readFileSync(dir + '/buffer.jsonl', 'utf8'), 'a\nb\n', 'buffer is gunzipped')
 })
 
-test('training opponents are drawn from the tier below, the current tier and the tier above', () => {
-  const seen = new Set(Array.from({ length: 200 }, () => trainingTier('stockfish-3').name))
-  assert.deepEqual([...seen].sort(), ['stockfish-2', 'stockfish-3', 'stockfish-4'])
-  assert.deepEqual([...new Set(Array.from({ length: 100 }, () => trainingTier(TIERS[0].name).name))].sort(), [TIERS[0].name, TIERS[1].name].sort(), 'bottom of the ladder has no tier below')
+test('training opponents: the rung below, the rung, the rung above, and the teacher engines', () => {
+  const teachers = ['stockfish-3', 'stockfish-8', 'stockfish-14', 'stockfish-20']
+  const seen = (tier: string) => [...new Set(Array.from({ length: 400 }, () => trainingTier(tier).name))].sort()
+  assert.deepEqual(seen('stockfish-7'), [...new Set(['stockfish-6', 'stockfish-7', 'sunfish', ...teachers])].sort())
+  assert.deepEqual(seen(TIERS[0].name), [TIERS[0].name, TIERS[1].name, ...teachers].sort(), 'bottom of the ladder has no rung below')
+})
+
+test('acpl averages the agent\'s own centipawn losses, from its side, clamped', async () => {
+  const { acpl } = await import('../src/worker.ts')
+  // white: +20 → -80 (white lost 100), black: -80 → -60 (black lost 20), white: -60 → -2000 clamped (white lost 1000), black: …
+  const evals = [20, -80, -60, -1000, -1000]
+  assert.equal(acpl([{ evals, agentWhite: true }]), (100 + 940) / 2)
+  assert.equal(acpl([{ evals, agentWhite: false }]), (20 + 0) / 2)
+  assert.equal(acpl([]), 0)
 })
 
 test('rates summarise the last 40 eval games of the current tier', () => {
