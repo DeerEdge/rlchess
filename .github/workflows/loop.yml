@@ -54,7 +54,7 @@ jobs:
             buffer.jsonl
           key: rlchess-state-v3-${{ github.run_id }}
       # each run schedules the next one itself, 20 minutes after its own start
-      - if: always() && inputs.mode != 'extra'
+      - if: always()
         run: |
           sleep $(( 1200 - ($(date +%s) - START) > 0 ? 1200 - ($(date +%s) - START) : 0 ))
           gh workflow run loop.yml --ref main
