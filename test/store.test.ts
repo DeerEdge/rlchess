@@ -5,7 +5,7 @@ import { playMany, score, trainingTier, rates } from '../src/worker.ts'
 import { TIERS } from '../src/encode.ts'
 import { EngineTimeout } from '../src/uci.ts'
 
-const run: RunSummary = { ts: '2026-10-31T00:00:00Z', run: 96, tier: 'random', elo: 400, score40: 0.5, win40: 0.3, draw40: 0.4, plies: 80, buffer: 1000, seconds: 300, gamesTotal: 8, loss: 1.2, record: { random: { w: 1, d: 0, l: 0 } } }
+const run: RunSummary = { ts: '2026-10-31T00:00:00Z', run: 72, tier: 'random', elo: 400, score40: 0.5, win40: 0.3, draw40: 0.4, plies: 80, buffer: 1000, seconds: 300, gamesTotal: 8, loss: 1.2, record: { random: { w: 1, d: 0, l: 0 } } }
 const game: GameRecord = { ts: run.ts, tier: 'random', kind: 'eval', result: '1-0', pgn: '1. e4 *', agentWhite: true, plies: 1 }
 
 const fakeKv = () => {
@@ -26,13 +26,13 @@ test('publish writes state, appends metrics (cap 20000), prepends games (cap 500
   kv.store.set('metrics', JSON.stringify(Array.from({ length: 20000 }, (_, i) => ({ run: i }))))
   kv.store.set('games', JSON.stringify(Array.from({ length: 500 }, (_, i) => ({ pgn: String(i) }))))
   await publish(run, [game], { weights: '{"w":1}', buffer: 'line\n', state: '{"run":96}', kv })
-  assert.equal(JSON.parse(kv.store.get('state')!).run, 96)
-  const metrics = JSON.parse(kv.store.get('metrics')!); assert.equal(metrics.length, 20000); assert.equal(metrics.at(-1).run, 96)
+  assert.equal(JSON.parse(kv.store.get('state')!).run, 72)
+  const metrics = JSON.parse(kv.store.get('metrics')!); assert.equal(metrics.length, 20000); assert.equal(metrics.at(-1).run, 72)
   const games = JSON.parse(kv.store.get('games')!); assert.equal(games.length, 500); assert.equal(games[0].pgn, '1. e4 *')
-  assert.equal(kv.store.get('archive/2026-10-31/run-96.pgn'), '1. e4 *')
+  assert.equal(kv.store.get('archive/2026-10-31/run-72.pgn'), '1. e4 *')
   assert.equal(kv.store.get('weights'), '{"w":1}'); assert.equal(kv.store.get('buffer'), 'line\n')
   assert.equal(kv.store.get('worker-state'), '{"run":96}', 'the worker\'s own state is durable too, separate from the published summary')
-  assert.equal(kv.store.get('weights/2026-10-31.json'), '{"w":1}', 'snapshot on every 96th run')
+  assert.equal(kv.store.get('weights/2026-10-31.json'), '{"w":1}', 'snapshot on every 72nd run')
 })
 
 test('playMany drops games whose engine times out instead of throwing', async () => {
