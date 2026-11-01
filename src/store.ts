@@ -5,7 +5,7 @@ export type GameRecord = { ts: string; tier: string; kind: 'tier' | 'selfplay' |
 export type Live = { phase: 'play' | 'train' | 'eval'; run?: number; tier?: string; game?: number; games?: number; against?: string; agentWhite?: boolean; pgn?: string; batch?: number; batches?: number; loss?: number }
 export type Kv = { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
 
-const METRICS_CAP = 20000, GAMES_CAP = 500, SNAPSHOT_EVERY = 96 // ≈ daily at a 15-minute cadence
+const METRICS_CAP = 20000, GAMES_CAP = 500, SNAPSHOT_EVERY = 72 // ≈ daily at a 20-minute cadence
 
 /** Cloudflare KV over its REST API — no SDK. Needs CF_ACCOUNT_ID, CF_KV_NAMESPACE_ID, CF_API_TOKEN. */
 export function cloudflareKv(): Kv | null {

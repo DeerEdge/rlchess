@@ -14,7 +14,7 @@ import type { EvalEntry } from './elo.ts'
 const env = (k: string, d: number) => +(process.env[k] ?? d)
 const GAMES = env('RLCHESS_GAMES', 8), SIMS = env('RLCHESS_SIMS', 40), EVAL_GAMES = env('RLCHESS_EVAL', 10)
 const BUDGET_MS = env('RLCHESS_BUDGET_MS', 5 * 60e3) // stop starting training games after this; eval always runs
-const LIVE_MS = env('RLCHESS_LIVE_MS', 60e3) // live-key cadence; KV writes are metered (free plan: 1000/day)
+const LIVE_MS = env('RLCHESS_LIVE_MS', 180e3) // live-key cadence; KV writes are metered (free plan: 1000/day)
 const TRAIN_SAMPLES = 4096, MAX_PLIES = 200, ENGINE = { movetime: 100, depth: 8 }, EVAL_TEMPERATURE_PLIES = 4
 const ANNOTATOR = { name: 'stockfish', rating: 0, cmd: ['stockfish'] }, ANNOTATE_PLIES = 100 // the page replays at most 100 plies
 const FILES = { state: 'state.json', weights: 'weights.json', buffer: 'buffer.jsonl' }

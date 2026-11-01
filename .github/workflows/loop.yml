@@ -1,7 +1,7 @@
 name: loop
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/20 * * * *"   # ~72 runs/day: fits the free KV write budget (1000/day) with live snapshots
   workflow_dispatch:
 permissions:
   contents: write
@@ -47,7 +47,7 @@ jobs:
           key: rlchess-state-${{ github.run_id }}
       # durable state lives in KV; this tiny daily commit only keeps GitHub from disabling the schedule after 60 idle days
       - run: |
-          test $(( $(node -p 'require("./state.json").run') % 96 )) -eq 0 || exit 0
+          test $(( $(node -p 'require("./state.json").run') % 72 )) -eq 0 || exit 0
           git config user.name rlchess-bot
           git config user.email rlchess-bot@users.noreply.github.com
           git add state.json

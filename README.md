@@ -11,7 +11,7 @@ A super tiny chess net (~86k params, dense MLP + MCTS) that learns in a loop tha
 5. promote to the next tier when the last 40 eval games average ≥ 0.55; never demote
 6. write the three files; publish state, metrics, games, the PGN archive and the live weights/buffer to Cloudflare KV (+ a daily weights snapshot)
 
-GitHub Actions runs this every 15 minutes (`.github/workflows/loop.yml`). Training games stop starting after `RLCHESS_BUDGET_MS` (5 min) so a run fits the job. Hot state rides the Actions cache; durable state is KV (a cache miss restores from it). A tiny `state.json` commit every 96th run keeps GitHub from disabling the schedule after 60 idle days.
+GitHub Actions runs this every 20 minutes (`.github/workflows/loop.yml`). Training games stop starting after `RLCHESS_BUDGET_MS` (5 min) so a run fits the job. Hot state rides the Actions cache; durable state is KV (a cache miss restores from it). A tiny `state.json` commit every 72nd run keeps GitHub from disabling the schedule after 60 idle days.
 
 ## local
 
