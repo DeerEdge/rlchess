@@ -46,7 +46,10 @@ export async function uciPlayer(tier: Tier, { movetime, depth, timeoutMs = 5000 
   return player
 }
 
-/** The tier's Player: a spawned engine (at the rung's own depth, if it sets one), or one of the internal movers (random, greedy). */
-export const playerFor = (tier: Tier, opts: Opts): Promise<Engine> =>
-  tier.cmd ? uciPlayer(tier, { ...opts, depth: tier.depth ?? opts.depth })
-    : Promise.resolve(Object.assign(tier.name === 'greedy' ? greedyPlayer : randomPlayer, { quit() {}, analyse: async () => ({ cp: 0, best: '(none)' }) }))
+/** The tier's Player: a spawned engine (at the rung's own depth, diluted with random moves if it says so), or one of the internal movers (random, greedy). */
+export async function playerFor(tier: Tier, opts: Opts): Promise<Engine> {
+  if (!tier.cmd) return Object.assign(tier.name === 'greedy' ? greedyPlayer : randomPlayer, { quit() {}, analyse: async () => ({ cp: 0, best: '(none)' }) })
+  const engine = await uciPlayer(tier, { ...opts, depth: tier.depth ?? opts.depth })
+  if (!tier.random) return engine
+  return Object.assign(async (c: Chess) => Math.random() < tier.random! ? randomPlayer(c) : engine(c), { quit: engine.quit, analyse: engine.analyse }) as Engine
+}

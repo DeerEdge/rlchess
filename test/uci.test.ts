@@ -2,14 +2,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Chess } from 'chess.js'
 import { execSync } from 'node:child_process'
-import { uciPlayer, EngineTimeout } from '../src/uci.ts'
+import { uciPlayer, playerFor, EngineTimeout } from '../src/uci.ts'
 import { TIERS } from '../src/encode.ts'
 import { uciMoves } from '../src/net.ts'
 
 const has = (bin: string) => { try { execSync(`which ${bin}`, { stdio: 'ignore' }); return true } catch { return false } }
 const tier = (name: string) => TIERS.find(t => t.name === name)!
 
-for (const [name, bin] of [['sf0-d1', 'stockfish'], ['sf0', 'stockfish'], ['sf-elo1320', 'stockfish']] as const) {
+for (const [name, bin] of [['sf0-r50', 'stockfish'], ['sf0', 'stockfish'], ['sf-elo1320', 'stockfish']] as const) {
   test(`${name} answers a legal bestmove on startpos`, { skip: !has(bin) }, async () => {
     const p = await uciPlayer(tier(name), { movetime: 100, depth: 8 })
     try {
@@ -46,4 +46,14 @@ test('analyse gives centipawns from white\'s view (mate ±1000) and Stockfish\'s
     assert.ok((await p.analyse('4k3/8/8/8/8/8/8/4K2Q w - - 0 1')).cp > 500, 'white up a queen, white to move')
     assert.ok((await p.analyse('4k3/8/8/8/8/8/8/4K2Q b - - 0 1')).cp > 500, 'white up a queen, black to move: still white\'s view')
   } finally { p.quit() }
+})
+
+test('a diluted rung plays a random legal move at its rate, else the engine\'s (and only engine moves are expert targets)', { skip: !has('stockfish') }, async () => {
+  const always = await playerFor({ name: 'x', rating: 0, cmd: ['stockfish'], depth: 1, random: 1 }, { movetime: 100, depth: 8 })
+  const never = await playerFor({ name: 'y', rating: 0, cmd: ['stockfish'], depth: 1, random: 0 }, { movetime: 100, depth: 8 })
+  try {
+    const r = await always(new Chess()), e = await never(new Chess())
+    assert.ok(uciMoves(new Chess()).includes(r.move) && !r.expert)
+    assert.ok(uciMoves(new Chess()).includes(e.move) && e.expert)
+  } finally { always.quit(); never.quit() }
 })
