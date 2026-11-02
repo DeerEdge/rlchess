@@ -27,8 +27,8 @@ jobs:
             state.json
             weights.json
             buffer.jsonl
-          key: rlchess-state-v3-${{ github.run_id }}
-          restore-keys: rlchess-state-v3-
+          key: rlchess-state-v4-${{ github.run_id }}
+          restore-keys: rlchess-state-v4-
       - run: |
           sudo apt-get update -q && sudo apt-get install -y -q stockfish
           echo /usr/games >> "$GITHUB_PATH"
@@ -54,7 +54,7 @@ jobs:
             state.json
             weights.json
             buffer.jsonl
-          key: rlchess-state-v3-${{ github.run_id }}
+          key: rlchess-state-v4-${{ github.run_id }}
       # each run schedules the next one itself, 20 minutes after its own start
       - if: always()
         run: |
