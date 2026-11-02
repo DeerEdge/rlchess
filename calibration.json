@@ -11,79 +11,91 @@
    "a": "random",
    "b": "greedy",
    "games": 40,
-   "score": 0.138
+   "score": 0.125
   },
   {
    "a": "random",
-   "b": "sf0-d1",
+   "b": "sf0-r75",
    "games": 40,
-   "score": 0
+   "score": 0.188
   },
   {
    "a": "greedy",
-   "b": "sf0-d1",
+   "b": "sf0-r75",
    "games": 40,
-   "score": 0
+   "score": 0.838
   },
   {
    "a": "greedy",
-   "b": "sf0-d2",
+   "b": "sf0-r50",
    "games": 40,
-   "score": 0
+   "score": 0.613
+  },
+  {
+   "a": "sf0-r75",
+   "b": "sf0-r50",
+   "games": 40,
+   "score": 0.15
+  },
+  {
+   "a": "sf0-r75",
+   "b": "sf0-r25",
+   "games": 40,
+   "score": 0.013
+  },
+  {
+   "a": "sf0-r50",
+   "b": "sf0-r25",
+   "games": 40,
+   "score": 0.087
+  },
+  {
+   "a": "sf0-r50",
+   "b": "sf0-d1",
+   "games": 40,
+   "score": 0.037
+  },
+  {
+   "a": "sf0-r25",
+   "b": "sf0-d1",
+   "games": 40,
+   "score": 0.063
+  },
+  {
+   "a": "sf0-r25",
+   "b": "sf0-d5",
+   "games": 40,
+   "score": 0.037
   },
   {
    "a": "sf0-d1",
-   "b": "sf0-d2",
+   "b": "sf0-d5",
    "games": 40,
-   "score": 0.388
+   "score": 0.425
   },
   {
    "a": "sf0-d1",
-   "b": "sf0-d3",
-   "games": 40,
-   "score": 0.412
-  },
-  {
-   "a": "sf0-d2",
-   "b": "sf0-d3",
-   "games": 40,
-   "score": 0.625
-  },
-  {
-   "a": "sf0-d2",
-   "b": "sf0-d5",
-   "games": 40,
-   "score": 0.412
-  },
-  {
-   "a": "sf0-d3",
-   "b": "sf0-d5",
-   "games": 40,
-   "score": 0.5
-  },
-  {
-   "a": "sf0-d3",
    "b": "sf0",
    "games": 40,
-   "score": 0.35
+   "score": 0.475
   },
   {
    "a": "sf0-d5",
    "b": "sf0",
    "games": 40,
-   "score": 0.362
+   "score": 0.25
   },
   {
    "a": "sf-elo1320",
    "b": "sf0-d5",
    "games": 40,
-   "score": 0.688
+   "score": 0.525
   },
   {
    "a": "sf-elo1320",
    "b": "sf0",
    "games": 40,
-   "score": 0.463
+   "score": 0.563
   },
   {
    "a": "sf0",
@@ -95,73 +107,73 @@
    "a": "sf-elo1320",
    "b": "sf3",
    "games": 40,
-   "score": 0.188
+   "score": 0.05
   },
   {
    "a": "sf-elo1320",
+   "b": "sf6",
+   "games": 40,
+   "score": 0.013
+  },
+  {
+   "a": "sf3",
    "b": "sf6",
    "games": 40,
    "score": 0.025
   },
   {
    "a": "sf3",
-   "b": "sf6",
-   "games": 40,
-   "score": 0.113
-  },
-  {
-   "a": "sf3",
    "b": "sf9",
    "games": 40,
-   "score": 0.037
+   "score": 0.063
   },
   {
    "a": "sf6",
    "b": "sf9",
    "games": 40,
-   "score": 0.275
+   "score": 0.188
   },
   {
    "a": "sf6",
    "b": "sf12",
    "games": 40,
-   "score": 0.2
+   "score": 0.113
   },
   {
    "a": "sf9",
    "b": "sf12",
    "games": 40,
-   "score": 0.4
+   "score": 0.35
   },
   {
    "a": "sf9",
    "b": "sf16",
    "games": 40,
-   "score": 0.263
+   "score": 0.275
   },
   {
    "a": "sf12",
    "b": "sf16",
    "games": 40,
-   "score": 0.425
+   "score": 0.463
   },
   {
    "a": "sf12",
    "b": "sf20",
    "games": 40,
-   "score": 0.338
+   "score": 0.45
   },
   {
    "a": "sf16",
    "b": "sf20",
    "games": 40,
-   "score": 0.388
+   "score": 0.487
   },
   {
    "a": "sf-elo1320",
    "b": "random",
    "games": 40,
-   "score": 1
+   "score": 0.988
   },
   {
    "a": "sf-elo1320",
@@ -171,33 +183,39 @@
   },
   {
    "a": "sf-elo1320",
+   "b": "sf0-r75",
+   "games": 40,
+   "score": 1
+  },
+  {
+   "a": "sf-elo1320",
+   "b": "sf0-r50",
+   "games": 40,
+   "score": 1
+  },
+  {
+   "a": "sf-elo1320",
+   "b": "sf0-r25",
+   "games": 40,
+   "score": 0.988
+  },
+  {
+   "a": "sf-elo1320",
    "b": "sf0-d1",
    "games": 40,
-   "score": 0.725
-  },
-  {
-   "a": "sf-elo1320",
-   "b": "sf0-d2",
-   "games": 40,
-   "score": 0.762
-  },
-  {
-   "a": "sf-elo1320",
-   "b": "sf0-d3",
-   "games": 40,
-   "score": 0.725
+   "score": 0.7
   },
   {
    "a": "sf-elo1320",
    "b": "sf9",
    "games": 40,
-   "score": 0.05
+   "score": 0.025
   },
   {
    "a": "sf-elo1320",
    "b": "sf12",
    "games": 40,
-   "score": 0.025
+   "score": 0.013
   },
   {
    "a": "sf-elo1320",
@@ -213,19 +231,20 @@
   }
  ],
  "ratings": {
-  "random": 210,
-  "greedy": 490,
-  "sf0-d1": 1120,
-  "sf0-d3": 1160,
-  "sf0-d2": 1180,
-  "sf0-d5": 1190,
-  "sf0": 1290,
+  "random": 110,
+  "sf0-r75": 280,
+  "sf0-r50": 500,
+  "greedy": 550,
+  "sf0-r25": 810,
+  "sf0-d1": 1210,
+  "sf0-d5": 1240,
+  "sf0": 1300,
   "sf-elo1320": 1320,
-  "sf3": 1560,
-  "sf6": 1840,
-  "sf9": 1980,
-  "sf12": 2060,
-  "sf16": 2120,
-  "sf20": 2180
+  "sf3": 1650,
+  "sf6": 1960,
+  "sf9": 2140,
+  "sf12": 2260,
+  "sf16": 2280,
+  "sf20": 2290
  }
 }
