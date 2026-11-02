@@ -1,0 +1,27 @@
+name: calibrate
+# Measures the ladder: every rung plays the next two (CALIBRATE_GAMES each) under the loop's protocol, on the loop's runner and Stockfish build;
+# a Bradley–Terry fit anchored on Stockfish's own UCI_Elo 1320 writes the ratings into tiers.json and the raw results into calibration.json.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  calibrate:
+    runs-on: ubuntu-24.04   # same image, and so the same apt Stockfish, as the loop
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: |
+          sudo apt-get update -q && sudo apt-get install -y -q stockfish
+          echo /usr/games >> "$GITHUB_PATH"
+      - run: npm ci
+      - run: npm run calibrate
+      - run: |
+          git config user.name rlchess-bot
+          git config user.email rlchess-bot@users.noreply.github.com
+          git add tiers.json calibration.json
+          git commit -m "Calibrate the ladder" && git push
