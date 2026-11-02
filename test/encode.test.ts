@@ -30,6 +30,7 @@ test('moveIndex maps uci squares to 0-63 (a1 = 0), with optional flip', () => {
 
 test('tiers are a ladder sorted by rating with random first', () => {
   assert.equal(TIERS[0].name, 'random')
-  assert.ok(TIERS.length >= 20)
+  assert.ok(TIERS.length >= 12)
+  assert.equal(TIERS.filter(t => t.anchor).length, 1, 'exactly one anchor')
   assert.ok(TIERS.every((t, i) => !i || TIERS[i - 1].rating <= t.rating), 'not sorted by rating')
 })

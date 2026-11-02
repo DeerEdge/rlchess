@@ -9,7 +9,8 @@ export class EngineTimeout extends Error { constructor(name: string) { super(`${
 export type Opts = { movetime: number; depth: number; timeoutMs?: number }
 
 /** Spawn a UCI engine and expose it as a Player. One outstanding request at a time. */
-export type Engine = Player & { quit(): void; evaluate(fen: string): Promise<number> }
+export type Analysis = { cp: number; best: string } // cp from white's view, mate = ±1000; best = Stockfish's move (uci), '(none)' when the game is over
+export type Engine = Player & { quit(): void; analyse(fen: string): Promise<Analysis> }
 
 export async function uciPlayer(tier: Tier, { movetime, depth, timeoutMs = 5000 }: Opts): Promise<Engine> {
   const [cmd, ...args] = tier.cmd!
@@ -35,16 +36,17 @@ export async function uciPlayer(tier: Tier, { movetime, depth, timeoutMs = 5000 
     send(`position fen ${chess.fen()}`); send(`go movetime ${movetime} depth ${depth}`)
     return { move: await waitFor(/^bestmove (\S+)/), expert: true }
   }) as Engine
-  /** Centipawns from white's view, mate = ±1000. */
-  player.evaluate = async fen => {
-    send(`position fen ${fen}`); send(`go depth ${depth}`); await waitFor(/^bestmove/)
-    return Math.max(-1000, Math.min(1000, fen.split(' ')[1] === 'w' ? score : -score))
+  player.analyse = async fen => {
+    send(`position fen ${fen}`); send(`go depth ${depth}`)
+    const best = await waitFor(/^bestmove (\S+)/)
+    return { cp: Math.max(-1000, Math.min(1000, fen.split(' ')[1] === 'w' ? score : -score)), best }
   }
   player.quit = () => { send('quit'); proc.kill() }
   proc.stdin.on('error', () => {})
   return player
 }
 
-/** The tier's Player: a spawned engine, or one of the internal movers (random, greedy). */
+/** The tier's Player: a spawned engine (at the rung's own depth, if it sets one), or one of the internal movers (random, greedy). */
 export const playerFor = (tier: Tier, opts: Opts): Promise<Engine> =>
-  tier.cmd ? uciPlayer(tier, opts) : Promise.resolve(Object.assign(tier.name === 'greedy' ? greedyPlayer : randomPlayer, { quit() {}, evaluate: async () => 0 }))
+  tier.cmd ? uciPlayer(tier, { ...opts, depth: tier.depth ?? opts.depth })
+    : Promise.resolve(Object.assign(tier.name === 'greedy' ? greedyPlayer : randomPlayer, { quit() {}, analyse: async () => ({ cp: 0, best: '(none)' }) }))

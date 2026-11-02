@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "tsc && node --import tsx --test test/*.test.ts",
+    "calibrate": "tsx src/calibrate.ts",
     "restore": "tsx src/worker.ts restore",
     "play": "tsx src/worker.ts play",
     "train": "tsx src/worker.ts train",

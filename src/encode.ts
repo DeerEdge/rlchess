@@ -2,7 +2,8 @@ import type { Chess } from 'chess.js'
 import { readFileSync } from 'node:fs'
 
 export const PLANES = 18 // 12 pieces, side-to-move, 4 castling, en-passant
-export type Tier = { name: string; rating: number; cmd?: string[]; options?: Record<string, string> }
+/** A ladder rung: in-page mover (no cmd) or UCI engine. `depth` overrides the protocol's depth 8; `anchor` is the rung whose rating is fixed (Stockfish's own UCI_Elo calibration). */
+export type Tier = { name: string; rating: number; cmd?: string[]; options?: Record<string, string>; depth?: number; anchor?: boolean }
 export const TIERS: Tier[] = JSON.parse(readFileSync(new URL('../tiers.json', import.meta.url), 'utf8'))
 
 const PIECE = 'pnbrqk'
