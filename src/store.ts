@@ -1,7 +1,7 @@
 import { gzipSync, gunzipSync } from 'node:zlib'
 
 export type Record3 = { w: number; d: number; l: number }
-export type RunSummary = { ts: string; run: number; tier: string; elo: number; score40: number; win40: number; draw40: number; acpl: number; plies: number; buffer: number; seconds: number; gamesTotal: number; loss: number; record: Record<string, Record3> }
+export type RunSummary = { ts: string; run: number; elo: number; panel: string[]; ladder: { name: string; rating: number }[]; score40: number; win40: number; draw40: number; acpl: number; plies: number; buffer: number; seconds: number; gamesTotal: number; loss: number; policyLoss: number; valueLoss: number; record: Record<string, Record3> }
 export type GameRecord = { ts: string; tier: string; kind: 'tier' | 'selfplay' | 'eval'; result: string; pgn: string; agentWhite: boolean; plies: number; evals?: number[]; elo?: number; delta?: number }
 export type Kv = { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
 
@@ -25,7 +25,7 @@ const json = async <T>(kv: Kv, key: string, fallback: T): Promise<T> => { const 
 export async function publish(run: RunSummary, games: GameRecord[], files: { weights: string; buffer: string; state: string; kv?: Kv }) {
   const kv = files.kv ?? cloudflareKv()
   if (!kv) { console.warn('publish skipped (no CF_API_TOKEN)'); return }
-  const metrics = await json<object[]>(kv, 'metrics', []), { record, ...point } = run
+  const metrics = await json<object[]>(kv, 'metrics', []), { record, ladder, panel, ...point } = run // the chart history keeps the numbers only
   const prev = await json<GameRecord[]>(kv, 'games', [])
   await kv.put('state', JSON.stringify(run))
   await kv.put('metrics', JSON.stringify([...metrics, point].slice(-METRICS_CAP)))

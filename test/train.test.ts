@@ -13,16 +13,9 @@ test('one epoch on a repeated sample lowers the loss', async () => {
   const b = await trainEpoch(net, samples, { batch: 32, lr: 1e-3 })
   assert.ok(Number.isFinite(a.loss))
   assert.ok(b.loss < a.loss, `${b.loss} !< ${a.loss}`)
+  assert.ok(Math.abs(a.policy + a.value - a.loss) < 1e-4, 'loss = policy + value, reported separately')
 })
 
 test('an empty sample set trains nothing and reports loss 0', async () => {
-  assert.deepEqual(await trainEpoch(createNet(), [], { batch: 32, lr: 1e-3 }), { loss: 0 })
-})
-
-test('onBatch reports progress per batch', async () => {
-  const { createNet } = await import('../src/net.ts')
-  const seen: [number, number][] = []
-  const s = { fen: new Chess().fen(), pi: { e2e4: 1 }, z: 0 }
-  await trainEpoch(createNet(), [s, s, s], { batch: 2, lr: 1e-3, onBatch: (i, n) => seen.push([i, n]) })
-  assert.deepEqual(seen, [[1, 2], [2, 2]])
+  assert.deepEqual(await trainEpoch(createNet(), [], { batch: 32, lr: 1e-3 }), { loss: 0, policy: 0, value: 0 })
 })

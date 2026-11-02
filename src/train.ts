@@ -18,26 +18,28 @@ function targets(samples: Sample[]) {
   return { from: tf.tensor2d(from, undefined, 'int32'), to: tf.tensor2d(to, undefined, 'int32'), mask: tf.tensor2d(mask), pi: tf.tensor2d(pi) }
 }
 
-/** One pass over `samples`: cross-entropy on legal-move policy + MSE on value (engine eval if present, else outcome). Returns mean loss. */
-export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch, lr, onBatch }: { batch: number; lr: number; onBatch?: (done: number, total: number, loss: number) => void }) {
-  if (!samples.length) return { loss: 0 }
-  const opt = tf.train.adam(lr), losses: number[] = []
+/** One pass over `samples`: cross-entropy on legal-move policy + MSE on value (engine eval if present, else outcome). Returns the mean losses. */
+export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch, lr }: { batch: number; lr: number }) {
+  if (!samples.length) return { loss: 0, policy: 0, value: 0 }
+  const opt = tf.train.adam(lr), parts: [number, number][] = [] // [policy, value] per batch
   const order = shuffle(samples.map((_, i) => i))
   for (let i = 0; i < order.length; i += batch) {
     const chunk = order.slice(i, i + batch).map(j => samples[j])
     const x = toInput(chunk.map(s => encode(new Chess(s.fen)))), t = targets(chunk), z = tf.tensor2d(chunk.map(s => [s.v ?? s.z])) // engine value when annotated, else the outcome
+    let policy!: tf.Scalar, value!: tf.Scalar
     const loss = opt.minimize(() => {
       const [p, v] = net.apply(x) as tf.Tensor[]
       const gf = tf.gather(p.slice([0, 0], [-1, 64]), t.from, 1, 1)
       const gt = tf.gather(p.slice([0, 64], [-1, 64]), t.to, 1, 1)
       const logits = gf.add(gt).add(t.mask.sub(1).mul(1e9))
-      const policyLoss = tf.logSoftmax(logits).mul(t.pi).sum(1).neg().mean()
-      return policyLoss.add(tf.losses.meanSquaredError(z, v)) as tf.Scalar
+      policy = tf.keep(tf.logSoftmax(logits).mul(t.pi).sum(1).neg().mean() as tf.Scalar)
+      value = tf.keep(tf.losses.meanSquaredError(z, v) as tf.Scalar)
+      return policy.add(value) as tf.Scalar
     }, true)!
-    losses.push((await loss.data())[0])
-    onBatch?.(losses.length, Math.ceil(order.length / batch), losses.at(-1)!)
-    tf.dispose([x, z, loss, ...Object.values(t)])
+    parts.push([(await policy.data())[0], (await value.data())[0]])
+    tf.dispose([x, z, loss, policy, value, ...Object.values(t)])
   }
   opt.dispose()
-  return { loss: losses.reduce((a, b) => a + b, 0) / losses.length }
+  const mean = (k: 0 | 1) => parts.reduce((s, p) => s + p[k], 0) / parts.length
+  return { loss: mean(0) + mean(1), policy: mean(0), value: mean(1) }
 }

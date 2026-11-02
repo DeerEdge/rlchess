@@ -3,11 +3,11 @@ import assert from 'node:assert/strict'
 import { publish, type RunSummary, type GameRecord } from '../src/store.ts'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import type { Sample } from '../src/game.ts'
-import { playMany, score, trainingTier, rates } from '../src/worker.ts'
+import { playMany, score, trainingPool, rates } from '../src/worker.ts'
 import { TIERS } from '../src/encode.ts'
 import { EngineTimeout } from '../src/uci.ts'
 
-const run: RunSummary = { ts: '2026-10-31T00:00:00Z', run: 72, tier: 'random', elo: 400, score40: 0.5, win40: 0.3, draw40: 0.4, acpl: 120, plies: 80, buffer: 1000, seconds: 300, gamesTotal: 8, loss: 1.2, record: { random: { w: 1, d: 0, l: 0 } } }
+const run: RunSummary = { ts: '2026-10-31T00:00:00Z', run: 72, elo: 400, panel: ['random'], ladder: [{ name: 'random', rating: 200 }], score40: 0.5, win40: 0.3, draw40: 0.4, acpl: 120, plies: 80, buffer: 1000, seconds: 300, gamesTotal: 8, loss: 1.2, policyLoss: 1, valueLoss: 0.2, record: { random: { w: 1, d: 0, l: 0 } } }
 const game: GameRecord = { ts: run.ts, tier: 'random', kind: 'eval', result: '1-0', pgn: '1. e4 *', agentWhite: true, plies: 1 }
 
 const fakeKv = () => {
@@ -64,11 +64,10 @@ test('restore pulls the worker files from kv and reports whether anything existe
   assert.equal(readFileSync(dir + '/state.json', 'utf8'), '{"run":3}'); assert.equal(readFileSync(dir + '/buffer.jsonl', 'utf8'), 'a\nb\n', 'buffer is gunzipped')
 })
 
-test('training opponents: the rung below, the rung, the rung above, and the teacher engines', () => {
-  const teachers = ['stockfish-3', 'stockfish-8', 'stockfish-14', 'stockfish-20']
-  const seen = (tier: string) => [...new Set(Array.from({ length: 400 }, () => trainingTier(tier).name))].sort()
-  assert.deepEqual(seen('stockfish-7'), [...new Set(['stockfish-6', 'stockfish-7', 'sunfish', ...teachers])].sort())
-  assert.deepEqual(seen(TIERS[0].name), [TIERS[0].name, TIERS[1].name, ...teachers].sort(), 'bottom of the ladder has no rung below')
+test('the training pool is the six rungs rated nearest the agent', () => {
+  const near = (elo: number) => [...new Set(Array.from({ length: 400 }, () => trainingPool(elo).name))].sort()
+  assert.deepEqual(near(-1000), TIERS.slice(0, 6).map(t => t.name).sort(), 'bottom of the ladder')
+  assert.equal(near(TIERS[7].rating).length, 6)
 })
 
 test('acpl averages the agent\'s own centipawn losses, from its side, clamped', async () => {
@@ -80,20 +79,21 @@ test('acpl averages the agent\'s own centipawn losses, from its side, clamped', 
   assert.equal(acpl([]), 0)
 })
 
-test('rates summarise the last 40 eval games of the current tier', () => {
+test('rates summarise the last 40 rated games', () => {
   const h = [...Array(10).fill({ tier: 'x', score: 1 }), ...Array(20).fill({ tier: 'x', score: 0.5 }), ...Array(10).fill({ tier: 'x', score: 0 }), { tier: 'y', score: 1 }]
-  assert.deepEqual(rates(h, 'x'), { score40: 0.5, win40: 0.25, draw40: 0.5 })
-  assert.deepEqual(rates([], 'x'), { score40: 0.5, win40: 0, draw40: 0 })
+  assert.deepEqual(rates(h), { score40: 0.5, win40: 0.25, draw40: 0.5 }, 'the last 40 (the first win drops out), whoever the opponent')
+  assert.deepEqual(rates([]), { score40: 0.5, win40: 0, draw40: 0 })
 })
 
 
-test('annotate attaches one eval per position, start included, capped at the replay length', async () => {
+test('annotate attaches one eval per position; annotateSamples sets value targets and blends in Stockfish\'s move', async () => {
   const { annotate, annotateSamples } = await import('../src/worker.ts')
   const g: GameRecord = { ...game, pgn: '1. e4 e5 2. Nf3 *', plies: 3 }
-  await annotate([g], async fen => fen.split(' ')[1] === 'w' ? 10 : -10)
+  await annotate([g], async fen => ({ cp: fen.split(' ')[1] === 'w' ? 10 : -10, best: '' }))
   assert.deepEqual(g.evals, [10, -10, 10, -10])
-  const s: Sample[] = [{ fen: 'x w', pi: {}, z: 1 }, { fen: 'x b', pi: {}, z: -1 }]
-  await annotateSamples(s, async () => 400) // +400 cp for white
-  assert.deepEqual(s.map(x => x.v), [+Math.tanh(1).toFixed(3), -(+Math.tanh(1).toFixed(3))], 'from the side to move')
+  const s: Sample[] = [{ fen: 'x w', pi: { a: 1, b: 0 }, z: 1 }, { fen: 'x b', pi: { a: 0.6, b: 0.4 }, z: -1 }]
+  await annotateSamples(s, async () => ({ cp: 400, best: 'b' })) // +400 cp for white; Stockfish prefers b
+  assert.deepEqual(s.map(x => x.v), [+Math.tanh(1).toFixed(3), -(+Math.tanh(1).toFixed(3))], 'value from the side to move')
+  assert.deepEqual(s.map(x => x.pi), [{ a: 0.5, b: 0.5 }, { a: 0.3, b: 0.7 }], 'policy target: half the original, half Stockfish\'s move')
 })
 
