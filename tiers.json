@@ -4,6 +4,7 @@
   {"name":"sf0-r50","rating":500,"cmd":["stockfish"],"options":{"Skill Level":"0"},"depth":1,"random":0.5},
   {"name":"greedy","rating":550},
   {"name":"sf0-r25","rating":810,"cmd":["stockfish"],"options":{"Skill Level":"0"},"depth":1,"random":0.25},
+  {"name":"sf0-r10","rating":1000,"cmd":["stockfish"],"options":{"Skill Level":"0"},"depth":1,"random":0.1},
   {"name":"sf0-d1","rating":1210,"cmd":["stockfish"],"options":{"Skill Level":"0"},"depth":1},
   {"name":"sf0-d5","rating":1240,"cmd":["stockfish"],"options":{"Skill Level":"0"},"depth":5},
   {"name":"sf0","rating":1300,"cmd":["stockfish"],"options":{"Skill Level":"0"}},

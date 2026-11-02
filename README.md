@@ -17,7 +17,7 @@ Training policy targets are the search's visit counts (or an opponent engine's m
 
 ## the ladder (`tiers.json`, measured by `npm run calibrate` / `.github/workflows/calibrate.yml`)
 
-Random and greedy movers, Stockfish skill 0 diluted with 75/50/25% random moves (as in Elo World), skill 0 at depth 1/5/8, skill 3–20, and Stockfish's `UCI_Elo 1320` as the anchor. Every rung plays its next two and the anchor plays every rung, 40 games each, on the loop's runner and Stockfish build; a maximum-likelihood Bradley–Terry fit with the anchor fixed gives the ratings (`calibration.json` has the raw results). Ratings are on Stockfish's CCRL-anchored scale, not human Elo.
+Random and greedy movers, Stockfish skill 0 diluted with 75/50/25/10% random moves (as in Elo World), skill 0 at depth 1/5/8, skill 3–20, and Stockfish's `UCI_Elo 1320` as the anchor. Every rung plays its next two and the anchor plays every rung, 40 games each, on the loop's runner and Stockfish build; a maximum-likelihood Bradley–Terry fit with the anchor fixed gives the ratings (`calibration.json` has the raw results). Ratings are on Stockfish's CCRL-anchored scale, not human Elo.
 
 Hot state rides the Actions cache; durable state is KV (6 writes per run, inside the free plan).
 
