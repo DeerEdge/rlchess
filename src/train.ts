@@ -18,10 +18,10 @@ function targets(samples: Sample[]) {
   return { from: tf.tensor2d(from, undefined, 'int32'), to: tf.tensor2d(to, undefined, 'int32'), mask: tf.tensor2d(mask), pi: tf.tensor2d(pi) }
 }
 
-/** One pass over `samples`: cross-entropy on legal-move policy + MSE on value (engine eval if present, else outcome). Returns the mean losses.
+/** One pass over `samples`: cross-entropy on legal-move policy + MSE on value (engine eval if present, else outcome). Returns the mean losses and the number of gradient steps.
  *  A fresh Adam per call unless `opt` is passed (pretraining keeps one across chunks). */
 export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch, lr, opt }: { batch: number; lr: number; opt?: ReturnType<typeof tf.train.adam> }) {
-  if (!samples.length) return { loss: 0, policy: 0, value: 0 }
+  if (!samples.length) return { loss: 0, policy: 0, value: 0, steps: 0 }
   const own = !opt, adam = opt ?? tf.train.adam(lr), parts: [number, number][] = [] // [policy, value] per batch
   const order = shuffle(samples.map((_, i) => i))
   for (let i = 0; i < order.length; i += batch) {
@@ -42,5 +42,5 @@ export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch
   }
   if (own) adam.dispose()
   const mean = (k: 0 | 1) => parts.reduce((s, p) => s + p[k], 0) / parts.length
-  return { loss: mean(0) + mean(1), policy: mean(0), value: mean(1) }
+  return { loss: mean(0) + mean(1), policy: mean(0), value: mean(1), steps: parts.length }
 }

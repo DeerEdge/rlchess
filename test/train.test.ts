@@ -15,10 +15,11 @@ test('one epoch on a repeated sample lowers the loss', async () => {
   assert.ok(Number.isFinite(a.loss))
   assert.ok(b.loss < a.loss, `${b.loss} !< ${a.loss}`)
   assert.ok(Math.abs(a.policy + a.value - a.loss) < 1e-4, 'loss = policy + value, reported separately')
+  assert.equal(a.steps, 2, 'one gradient step per batch')
 })
 
 test('an empty sample set trains nothing and reports loss 0', async () => {
-  assert.deepEqual(await trainEpoch(createNet(), [], { batch: 32, lr: 1e-3 }), { loss: 0, policy: 0, value: 0 })
+  assert.deepEqual(await trainEpoch(createNet(), [], { batch: 32, lr: 1e-3 }), { loss: 0, policy: 0, value: 0, steps: 0 })
 })
 
 test('a passed-in optimizer carries its state across calls', async () => {

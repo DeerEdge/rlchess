@@ -7,7 +7,7 @@ import { playMany, score, trainingPool, rates } from '../src/worker.ts'
 import { TIERS } from '../src/encode.ts'
 import { EngineTimeout } from '../src/uci.ts'
 
-const run: RunSummary = { ts: '2026-10-31T00:00:00Z', run: 72, elo: 400, panel: ['random'], ladder: [{ name: 'random', rating: 200 }], score40: 0.5, win40: 0.3, draw40: 0.4, acpl: 120, plies: 80, buffer: 1000, seconds: 300, gamesTotal: 8, loss: 1.2, policyLoss: 1, valueLoss: 0.2, record: { random: { w: 1, d: 0, l: 0 } } }
+const run: RunSummary = { ts: '2026-10-31T00:00:00Z', run: 72, elo: 400, panel: ['random'], ladder: [{ name: 'random', rating: 200 }], score40: 0.5, win40: 0.3, draw40: 0.4, acpl: 120, plies: 80, buffer: 1000, seconds: 300, gamesTotal: 8, steps: 384, loss: 1.2, policyLoss: 1, valueLoss: 0.2, record: { random: { w: 1, d: 0, l: 0 } } }
 const game: GameRecord = { ts: run.ts, tier: 'random', kind: 'eval', result: '1-0', pgn: '1. e4 *', agentWhite: true, plies: 1 }
 
 const fakeKv = () => {

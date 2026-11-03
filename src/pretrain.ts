@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { Chess, type Square } from 'chess.js'
 import tf from './tf.ts'
@@ -8,7 +8,7 @@ import type { Sample } from './game.ts'
 
 type Pv = { cp?: number; mate?: number; line: string }
 const CASTLE: Record<string, string> = { e1h1: 'e1g1', e1a1: 'e1c1', e8h8: 'e8g8', e8a8: 'e8c8' } // UCI_Chess960 writes castling as king-takes-rook
-const LR = 1e-3, WEIGHTS = 'weights.json'
+const LR = 1e-3, WEIGHTS = 'weights.json', STATE = 'state.json'
 
 /** One line of Lichess's evaluation database (database.lichess.org, CC0) → a sample: the deepest eval's first move as a one-hot target over the
  *  legal moves, its score as the value target from the side to move (white's-view cp, mate = ±1000 like the loop's annotator). Null for an
@@ -24,7 +24,8 @@ export function toSample(line: string): Sample | null {
   return { fen: c.fen(), pi: Object.fromEntries(moves.map(m => [m, +(m === best)])), z: 0, v: +Math.tanh((c.turn() === 'w' ? cp : -cp) / 400).toFixed(3) }
 }
 
-/** tsx src/pretrain.ts <chunk files of JSON lines>: one pass, one Adam across chunks, continuing weights.json if present; saved after every chunk. */
+/** tsx src/pretrain.ts <chunk files of JSON lines>: one pass, one Adam across chunks, continuing weights.json if present; saved after every chunk,
+ *  with its gradient steps added to the loop's step count in state.json. */
 async function main(files: string[]) {
   if (!files.length) throw new Error('no chunk files')
   const net = createNet(), opt = tf.train.adam(LR), t0 = Date.now()
@@ -32,8 +33,9 @@ async function main(files: string[]) {
   let seen = 0, skipped = 0
   for (const f of files) {
     const samples = readFileSync(f, 'utf8').split('\n').filter(Boolean).flatMap(l => { try { const s = toSample(l); if (s) return [s] } catch {} skipped++; return [] })
-    const { policy, value } = await trainEpoch(net, samples, { batch: 256, lr: LR, opt })
+    const { policy, value, steps } = await trainEpoch(net, samples, { batch: 256, lr: LR, opt })
     await saveWeights(net, WEIGHTS); seen += samples.length
+    if (existsSync(STATE)) { const s = JSON.parse(readFileSync(STATE, 'utf8')); s.steps = (s.steps ?? 0) + steps; writeFileSync(STATE, JSON.stringify(s, null, 1)) }
     console.log(`pretrain: ${seen} positions (${skipped} skipped), policy ${policy.toFixed(4)}, value ${value.toFixed(4)}, ${Math.round((Date.now() - t0) / 1000)}s`)
   }
 }

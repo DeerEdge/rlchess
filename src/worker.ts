@@ -20,7 +20,7 @@ const PANEL = 4, POOL = 6, BLEND = 0.5 // rated opponents per run (one per eval 
 const FILES = { state: 'state.json', weights: 'weights.json', buffer: 'buffer.jsonl' }
 
 type Rated = { tier: string; score: number } // one rated game: opponent and the agent's score
-type State = { run: number; elo: number; evalHistory: Rated[]; record: Record<string, Record3>; gamesTotal: number; loss: number; policyLoss: number; valueLoss: number }
+type State = { run: number; elo: number; evalHistory: Rated[]; record: Record<string, Record3>; gamesTotal: number; steps?: number; loss: number; policyLoss: number; valueLoss: number } // steps: gradient steps, counted from the Lichess pretraining on
 type Game = Awaited<ReturnType<typeof playGame>> & { agentWhite: boolean; against?: string }
 
 /** Play up to n games, `parallel` at a time (their searches share batched network calls); a game whose engine goes silent is dropped,
@@ -122,8 +122,8 @@ async function main(mode: Mode, shard: number) {
   if (mode === 'train') {
     const buffer = ReplayBuffer.load(FILES.buffer), shards = take<{ games: number; samples: Sample[] }>('play')
     for (const s of shards) { buffer.append(s.samples); state.gamesTotal += s.games }
-    const { loss, policy, value } = await trainEpoch(net, shuffle([...buffer.samples]).slice(0, TRAIN_SAMPLES), { batch: 256, lr: 1e-3 })
-    Object.assign(state, { loss: +loss.toFixed(4), policyLoss: +policy.toFixed(4), valueLoss: +value.toFixed(4) })
+    const { loss, policy, value, steps } = await trainEpoch(net, shuffle([...buffer.samples]).slice(0, TRAIN_SAMPLES), { batch: 256, lr: 1e-3 })
+    Object.assign(state, { loss: +loss.toFixed(4), policyLoss: +policy.toFixed(4), valueLoss: +value.toFixed(4), steps: (state.steps ?? 0) + steps })
     writeFileSync(FILES.state, JSON.stringify(state, null, 1)); await saveWeights(net, FILES.weights); buffer.save(FILES.buffer)
     return console.log(`train: ${shards.length} shards, loss ${state.loss}, buffer ${buffer.samples.length}, ${secs()}s`)
   }
@@ -151,7 +151,7 @@ async function main(mode: Mode, shard: number) {
   const summary = { ts, run: ++state.run, elo: Math.round(state.elo), panel: nearest(state.elo, PANEL).map(t => t.name), ladder: TIERS.map(({ name, rating }) => ({ name, rating })),
     score40: +score40.toFixed(3), win40: +win40.toFixed(3), draw40: +draw40.toFixed(3), acpl: Math.round(acpl(games)),
     plies: Math.round(games.reduce((s, g) => s + g.plies, 0) / Math.max(1, games.length)), buffer: buffer.split('\n').filter(Boolean).length, seconds: secs(),
-    gamesTotal: (state.gamesTotal += games.length), loss: state.loss, policyLoss: state.policyLoss, valueLoss: state.valueLoss, record: state.record }
+    gamesTotal: (state.gamesTotal += games.length), steps: state.steps ?? 0, loss: state.loss, policyLoss: state.policyLoss, valueLoss: state.valueLoss, record: state.record }
   state.evalHistory = state.evalHistory.slice(-40)
   writeFileSync(FILES.state, JSON.stringify(state, null, 1))
   await publish(summary, games, { weights: readFileSync(FILES.weights, 'utf8'), buffer, state: readFileSync(FILES.state, 'utf8') })
