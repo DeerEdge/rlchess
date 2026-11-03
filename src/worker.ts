@@ -11,9 +11,10 @@ import { publish, restore, type GameRecord, type Record3 } from './store.ts'
 import { Chess } from 'chess.js'
 
 const env = (k: string, d: number) => +(process.env[k] ?? d)
-const GAMES = env('RLCHESS_GAMES', 32), SIMS = env('RLCHESS_SIMS', 40), EVAL_GAMES = env('RLCHESS_EVAL', 24), SHARDS = 4 // one process per runner core
+const GAMES = env('RLCHESS_GAMES', 128), SIMS = env('RLCHESS_SIMS', 40), EVAL_GAMES = env('RLCHESS_EVAL', 24), SHARDS = 4 // one process per runner core
+const PARALLEL = 8 // games in flight per process: their searches' network calls run as one batch
 const BUDGET_MS = env('RLCHESS_BUDGET_MS', 3.5 * 60e3) // per play cycle: stop starting games after this
-const TRAIN_SAMPLES = 32768, MAX_PLIES = 200, ENGINE = { movetime: 100, depth: 8 }, EVAL_TEMPERATURE_PLIES = 4
+const TRAIN_SAMPLES = 60000 /* one pass over the whole buffer */, MAX_PLIES = 200, ENGINE = { movetime: 100, depth: 8 }, EVAL_TEMPERATURE_PLIES = 4
 const ANNOTATOR = { name: 'stockfish', rating: 0, cmd: ['stockfish'] }, ANNOTATE_PLIES = 100 // per-ply evals of rated games: the page's eval bar (≤100 plies) and acpl
 const PANEL = 4, POOL = 6, BLEND = 0.5 // rated opponents per run (one per eval shard), training opponents, share of the policy target given to Stockfish's move
 const FILES = { state: 'state.json', weights: 'weights.json', buffer: 'buffer.jsonl' }
@@ -22,12 +23,18 @@ type Rated = { tier: string; score: number } // one rated game: opponent and the
 type State = { run: number; elo: number; evalHistory: Rated[]; record: Record<string, Record3>; gamesTotal: number; loss: number; policyLoss: number; valueLoss: number }
 type Game = Awaited<ReturnType<typeof playGame>> & { agentWhite: boolean; against?: string }
 
-/** Play up to n games; a game whose engine goes silent is dropped, and no new game starts after `deadline`. */
-export async function playMany(n: number, factory: (i: number) => Promise<Game>, deadline = Infinity): Promise<Game[]> {
+/** Play up to n games, `parallel` at a time (their searches share batched network calls); a game whose engine goes silent is dropped,
+ *  and no new game starts after `deadline`. */
+export async function playMany(n: number, factory: (i: number) => Promise<Game>, deadline = Infinity, parallel = 1): Promise<Game[]> {
   const out: Game[] = []
-  for (let i = 0; i < n && Date.now() < deadline; i++) {
-    try { out.push(await factory(i)) } catch (e) { if (e instanceof EngineTimeout) console.warn(`dropped game ${i}: ${e.message}`); else throw e }
+  let next = 0
+  const lane = async () => {
+    while (next < n && Date.now() < deadline) {
+      const i = next++
+      try { out.push(await factory(i)) } catch (e) { if (e instanceof EngineTimeout) console.warn(`dropped game ${i}: ${e.message}`); else throw e }
+    }
   }
+  await Promise.all(Array.from({ length: parallel }, lane))
   return out
 }
 
@@ -103,13 +110,13 @@ async function main(mode: Mode, shard: number) {
   const secs = () => Math.round((Date.now() - t0) / 1000)
 
   if (mode === 'play') {
-    const explore = agentPlayer(net, SIMS, { noise: true }), deadline = Date.now() + BUDGET_MS
-    const pool = await playMany(Math.ceil(GAMES / 2), i => vs(explore, i, trainingPool(state.elo)), deadline)
-    const self = await playMany(Math.floor(GAMES / 2), async () => ({ ...await playGame(explore, explore, { maxPlies: MAX_PLIES, record: true }), agentWhite: true }), deadline)
-    const samples = [...pool, ...self].flatMap(g => g.samples)
+    const explore = agentPlayer(net, SIMS, { noise: true })
+    const selfPlay = async (): Promise<Game> => ({ ...await playGame(explore, explore, { maxPlies: MAX_PLIES, record: true }), agentWhite: true })
+    const games = await playMany(GAMES, i => i % 2 ? selfPlay() : vs(explore, i / 2, trainingPool(state.elo)), Date.now() + BUDGET_MS, PARALLEL) // half vs the pool, half self-play
+    const samples = games.flatMap(g => g.samples), pool = games.filter(g => g.against).length
     await withStockfish(ev => annotateSamples(samples, ev))
-    writeFileSync(`play-${shard}.json`, JSON.stringify({ games: pool.length + self.length, samples }))
-    return console.log(`play ${shard}: ${pool.length} pool + ${self.length} self-play games, ${samples.length} samples, ${secs()}s`)
+    writeFileSync(`play-${shard}.json`, JSON.stringify({ games: games.length, samples }))
+    return console.log(`play ${shard}: ${pool} pool + ${games.length - pool} self-play games, ${samples.length} samples, ${secs()}s`)
   }
 
   if (mode === 'train') {
@@ -123,7 +130,7 @@ async function main(mode: Mode, shard: number) {
 
   if (mode === 'eval') {
     const exploit = agentPlayer(net, SIMS, { temperaturePlies: EVAL_TEMPERATURE_PLIES }), opponent = panel[shard % panel.length]
-    const games: GameRecord[] = (await playMany(Math.ceil(EVAL_GAMES / SHARDS), k => vs(exploit, k, opponent))) // colour alternates by game number
+    const games: GameRecord[] = (await playMany(Math.ceil(EVAL_GAMES / SHARDS), k => vs(exploit, k, opponent), Infinity, PARALLEL)) // colour alternates by game number
       .map(g => ({ ts, tier: opponent.name, kind: 'eval', result: g.result, pgn: g.pgn, agentWhite: g.agentWhite, plies: g.plies }))
     await withStockfish(ev => annotate(games, ev))
     writeFileSync(`eval-${shard}.json`, JSON.stringify(games))

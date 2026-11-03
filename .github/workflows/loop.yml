@@ -1,5 +1,6 @@
 name: loop
-# Runs chain themselves (each dispatches the next 20 minutes after its own start; ~72/day fits the free KV write budget). No cron: GitHub's is best-effort.
+# Runs chain themselves: each dispatches the next as it finishes (~16 min apart; ~90/day × 6 writes fits the free KV budget of 1000/day).
+# A failed run waits out a 20-minute slot first, so a broken run cannot spin. No cron: GitHub's is best-effort.
 on:
   workflow_dispatch:
 run-name: full
@@ -12,7 +13,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-24.04   # pinned: the apt Stockfish build is part of the frozen eval protocol
-    timeout-minutes: 30   # ≤ 6 min of work, then idles out the 20-minute slot before dispatching the next run
+    timeout-minutes: 30   # ~16 min of work
     steps:
       - run: echo "START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
@@ -55,10 +56,10 @@ jobs:
             weights.json
             buffer.jsonl
           key: rlchess-state-v4-${{ github.run_id }}
-      # each run schedules the next one itself, 20 minutes after its own start
+      # each run schedules the next one itself: at once after a success, at the 20-minute mark after a failure
       - if: always()
         run: |
-          sleep $(( 1200 - ($(date +%s) - START) > 0 ? 1200 - ($(date +%s) - START) : 0 ))
+          [ "${{ job.status }}" = success ] || sleep $(( 1200 - ($(date +%s) - START) > 0 ? 1200 - ($(date +%s) - START) : 0 ))
           gh workflow run loop.yml --ref main
         env:
           GH_TOKEN: ${{ github.token }}

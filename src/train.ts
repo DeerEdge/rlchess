@@ -18,16 +18,17 @@ function targets(samples: Sample[]) {
   return { from: tf.tensor2d(from, undefined, 'int32'), to: tf.tensor2d(to, undefined, 'int32'), mask: tf.tensor2d(mask), pi: tf.tensor2d(pi) }
 }
 
-/** One pass over `samples`: cross-entropy on legal-move policy + MSE on value (engine eval if present, else outcome). Returns the mean losses. */
-export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch, lr }: { batch: number; lr: number }) {
+/** One pass over `samples`: cross-entropy on legal-move policy + MSE on value (engine eval if present, else outcome). Returns the mean losses.
+ *  A fresh Adam per call unless `opt` is passed (pretraining keeps one across chunks). */
+export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch, lr, opt }: { batch: number; lr: number; opt?: ReturnType<typeof tf.train.adam> }) {
   if (!samples.length) return { loss: 0, policy: 0, value: 0 }
-  const opt = tf.train.adam(lr), parts: [number, number][] = [] // [policy, value] per batch
+  const own = !opt, adam = opt ?? tf.train.adam(lr), parts: [number, number][] = [] // [policy, value] per batch
   const order = shuffle(samples.map((_, i) => i))
   for (let i = 0; i < order.length; i += batch) {
     const chunk = order.slice(i, i + batch).map(j => samples[j])
     const x = toInput(chunk.map(s => encode(new Chess(s.fen)))), t = targets(chunk), z = tf.tensor2d(chunk.map(s => [s.v ?? s.z])) // engine value when annotated, else the outcome
     let policy!: tf.Scalar, value!: tf.Scalar
-    const loss = opt.minimize(() => {
+    const loss = adam.minimize(() => {
       const [p, v] = net.apply(x) as tf.Tensor[]
       const gf = tf.gather(p.slice([0, 0], [-1, 64]), t.from, 1, 1)
       const gt = tf.gather(p.slice([0, 64], [-1, 64]), t.to, 1, 1)
@@ -39,7 +40,7 @@ export async function trainEpoch(net: tf.LayersModel, samples: Sample[], { batch
     parts.push([(await policy.data())[0], (await value.data())[0]])
     tf.dispose([x, z, loss, policy, value, ...Object.values(t)])
   }
-  opt.dispose()
+  if (own) adam.dispose()
   const mean = (k: 0 | 1) => parts.reduce((s, p) => s + p[k], 0) / parts.length
   return { loss: mean(0) + mean(1), policy: mean(0), value: mean(1) }
 }

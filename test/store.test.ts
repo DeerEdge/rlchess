@@ -44,8 +44,14 @@ test('playMany drops games whose engine times out instead of throwing', async ()
 
 test('playMany stops starting games once the deadline has passed', async () => {
   let started = 0
-  const games = await playMany(10, async () => { started++; await new Promise(r => setTimeout(r, 30)); return { pgn: '', result: '1/2-1/2' as const, samples: [], agentWhite: true, plies: 0 } }, Date.now() + 50)
+  const games = await playMany(10, async () => { started++; await new Promise(r => setTimeout(r, 30)); return { pgn: '', result: '1/2-1/2' as const, samples: [], agentWhite: true, plies: 0 } }, Date.now() + 50, 2)
   assert.ok(started < 10 && games.length === started, `started ${started}`)
+})
+
+test('playMany keeps up to `parallel` games in flight and plays all n', async () => {
+  let live = 0, peak = 0
+  const games = await playMany(7, async () => { peak = Math.max(peak, ++live); await new Promise(r => setTimeout(r, 10)); live--; return { pgn: '', result: '1/2-1/2' as const, samples: [], agentWhite: true, plies: 0 } }, Infinity, 3)
+  assert.equal(games.length, 7); assert.equal(peak, 3)
 })
 
 test('score is from the agent\'s colour, not the game index', () => {

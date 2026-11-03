@@ -1,0 +1,57 @@
+name: pretrain
+# One-off supervised pretraining of the loop's net on Lichess's evaluated positions (database.lichess.org, CC0): the newest cached weights
+# continue for one pass over the first `positions` lines, and the result is cached for the loop to pick up.
+# Disable the loop workflow first (its next dispatch would cancel this run while pending), re-enable and dispatch it after.
+on:
+  workflow_dispatch:
+    inputs:
+      positions:
+        description: positions to stream from the start of the database
+        default: '3000000'
+run-name: pretrain
+permissions:
+  contents: read
+concurrency:
+  group: rlchess
+  cancel-in-progress: false
+jobs:
+  pretrain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            state.json
+            weights.json
+            buffer.jsonl
+          key: rlchess-state-v4-${{ github.run_id }}
+          restore-keys: rlchess-state-v4-
+      - run: npm ci
+      - run: npm run restore   # KV fallback on a cache miss
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      # no pipefail on purpose: head closing the pipe early is the normal end
+      - run: |
+          mkdir chunks
+          curl -sL https://database.lichess.org/lichess_db_eval.jsonl.zst | zstd -dc | head -n "$((N))" | split -l 32768 - chunks/
+          ls chunks | wc -l
+        env:
+          N: ${{ inputs.positions }}
+      - run: npm run pretrain -- chunks/*
+        timeout-minutes: 130   # weights are saved after every chunk, so a timeout keeps what was done
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            state.json
+            weights.json
+            buffer.jsonl
+          key: rlchess-state-v4-${{ github.run_id }}

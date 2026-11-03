@@ -10,6 +10,7 @@
     "train": "tsx src/worker.ts train",
     "eval": "tsx src/worker.ts eval",
     "publish": "tsx src/worker.ts publish",
+    "pretrain": "tsx src/pretrain.ts",
     "run": "npm run restore && npm run play && npm run train && npm run eval && npm run publish"
   },
   "dependencies": {
