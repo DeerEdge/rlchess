@@ -10,7 +10,7 @@ const vmstat = `procs -----------memory---------- ---swap-- -----io---- -system-
  4  0      0 11000000  10000 1000000    0    0     0     0    0    0 90  5  5  0  0  0 2026-11-03 06:22:20`
 
 test('usage turns vmstat samples and phase starts into the CPU timeline, averages and phase spans of a run', () => {
-  const u = usage(vmstat, `play ${t0 + 5}\ntrain ${t0 + 10}\n`, t0, t0 + 20, 16_000_000)!
+  const u = usage(vmstat, `play ${t0 + 5}\ntrain ${t0 + 10}\n`, t0, t0 + 19.85, 16_000_000)! // the run's end is a fraction: spans stay whole seconds
   assert.deepEqual(u.timeline, [[10, 90], [15, 95]], 'seconds since the start, busy % (100 − idle); the since-boot first line is skipped')
   assert.equal(u.cpu, 93)
   assert.equal(u.memPeakGB, 3.8, 'used = total − free − buffers − cache, peak, in GiB')

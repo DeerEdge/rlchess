@@ -15,7 +15,7 @@ export function usage(vmstat: string, phaseLog: string, t0: number, end: number,
   return {
     cpu: Math.round(samples.reduce((a, s) => a + s.busy, 0) / samples.length),
     memPeakGB: +(Math.max(...samples.map(s => s.used)) / 2 ** 20).toFixed(1),
-    phases: marks.map(([n, s], i) => [n, s, i + 1 < marks.length ? marks[i + 1][1] : end - t0]),
+    phases: marks.map(([n, s], i) => [n, s, i + 1 < marks.length ? marks[i + 1][1] : Math.round(end - t0)]),
     timeline: samples.map(s => [Math.round(s.t - t0), s.busy]),
   }
 }
