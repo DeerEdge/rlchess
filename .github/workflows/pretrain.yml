@@ -45,7 +45,7 @@ jobs:
           ls chunks | wc -l
         env:
           N: ${{ inputs.positions }}
-      - run: npm run pretrain -- chunks/*
+      - run: npx tsx src/pretrain.ts chunks/*   # not an npm script: npm would run "pretrain" before every "train"
         timeout-minutes: 130   # weights are saved after every chunk, so a timeout keeps what was done
       - uses: actions/cache/save@v4
         if: always()
