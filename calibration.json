@@ -11,37 +11,37 @@
    "a": "random",
    "b": "sf0-r75",
    "games": 40,
-   "score": 0.163
+   "score": 0.125
   },
   {
    "a": "random",
    "b": "sf0-r50",
    "games": 40,
-   "score": 0
+   "score": 0.025
   },
   {
    "a": "sf0-r75",
    "b": "sf0-r50",
    "games": 40,
-   "score": 0.125
+   "score": 0.113
   },
   {
    "a": "sf0-r75",
    "b": "greedy",
    "games": 40,
-   "score": 0.263
+   "score": 0.15
   },
   {
    "a": "sf0-r50",
    "b": "greedy",
    "games": 40,
-   "score": 0.412
+   "score": 0.4
   },
   {
    "a": "sf0-r50",
    "b": "sf0-r25",
    "games": 40,
-   "score": 0.025
+   "score": 0.075
   },
   {
    "a": "greedy",
@@ -53,133 +53,205 @@
    "a": "greedy",
    "b": "sf0-r10",
    "games": 40,
-   "score": 0.1
+   "score": 0.063
   },
   {
    "a": "sf0-r25",
    "b": "sf0-r10",
    "games": 40,
-   "score": 0.2
+   "score": 0.15
   },
   {
    "a": "sf0-r25",
    "b": "sf0-d1",
    "games": 40,
-   "score": 0.013
+   "score": 0.025
   },
   {
    "a": "sf0-r10",
    "b": "sf0-d1",
    "games": 40,
-   "score": 0.275
+   "score": 0.163
   },
   {
    "a": "sf0-r10",
    "b": "sf0-d5",
    "games": 40,
-   "score": 0.175
+   "score": 0.125
   },
   {
    "a": "sf0-d1",
    "b": "sf0-d5",
    "games": 40,
-   "score": 0.362
+   "score": 0.45
   },
   {
-   "a": "sf0-d1",
-   "b": "sf0",
+   "a": "sf-elo1320",
+   "b": "sf0-d1",
    "games": 40,
-   "score": 0.325
+   "score": 0.688
+  },
+  {
+   "a": "sf-elo1320",
+   "b": "sf0-d5",
+   "games": 40,
+   "score": 0.675
   },
   {
    "a": "sf0-d5",
    "b": "sf0",
    "games": 40,
-   "score": 0.412
-  },
-  {
-   "a": "sf-elo1320",
-   "b": "sf0-d5",
-   "games": 40,
-   "score": 0.588
+   "score": 0.287
   },
   {
    "a": "sf-elo1320",
    "b": "sf0",
    "games": 40,
-   "score": 0.425
+   "score": 0.588
+  },
+  {
+   "a": "sf-elo1320",
+   "b": "sf1",
+   "games": 40,
+   "score": 0.412
   },
   {
    "a": "sf0",
-   "b": "sf3",
+   "b": "sf1",
    "games": 40,
-   "score": 0.163
+   "score": 0.362
   },
   {
-   "a": "sf-elo1320",
-   "b": "sf3",
-   "games": 40,
-   "score": 0.188
-  },
-  {
-   "a": "sf-elo1320",
-   "b": "sf6",
-   "games": 40,
-   "score": 0.013
-  },
-  {
-   "a": "sf3",
-   "b": "sf6",
-   "games": 40,
-   "score": 0.075
-  },
-  {
-   "a": "sf3",
-   "b": "sf9",
-   "games": 40,
-   "score": 0.025
-  },
-  {
-   "a": "sf6",
-   "b": "sf9",
+   "a": "sf0",
+   "b": "sf2",
    "games": 40,
    "score": 0.175
   },
   {
-   "a": "sf6",
-   "b": "sf12",
+   "a": "sf1",
+   "b": "sf2",
+   "games": 40,
+   "score": 0.425
+  },
+  {
+   "a": "sf1",
+   "b": "sf3",
+   "games": 40,
+   "score": 0.212
+  },
+  {
+   "a": "sf2",
+   "b": "sf3",
+   "games": 40,
+   "score": 0.263
+  },
+  {
+   "a": "sf2",
+   "b": "sf4",
    "games": 40,
    "score": 0.188
+  },
+  {
+   "a": "sf3",
+   "b": "sf4",
+   "games": 40,
+   "score": 0.4
+  },
+  {
+   "a": "sf3",
+   "b": "sf5",
+   "games": 40,
+   "score": 0.263
+  },
+  {
+   "a": "sf4",
+   "b": "sf5",
+   "games": 40,
+   "score": 0.237
+  },
+  {
+   "a": "sf4",
+   "b": "sf6",
+   "games": 40,
+   "score": 0.163
+  },
+  {
+   "a": "sf5",
+   "b": "sf6",
+   "games": 40,
+   "score": 0.338
+  },
+  {
+   "a": "sf5",
+   "b": "sf7",
+   "games": 40,
+   "score": 0.15
+  },
+  {
+   "a": "sf6",
+   "b": "sf7",
+   "games": 40,
+   "score": 0.35
+  },
+  {
+   "a": "sf6",
+   "b": "sf8",
+   "games": 40,
+   "score": 0.287
+  },
+  {
+   "a": "sf7",
+   "b": "sf8",
+   "games": 40,
+   "score": 0.487
+  },
+  {
+   "a": "sf7",
+   "b": "sf9",
+   "games": 40,
+   "score": 0.412
+  },
+  {
+   "a": "sf8",
+   "b": "sf9",
+   "games": 40,
+   "score": 0.45
+  },
+  {
+   "a": "sf8",
+   "b": "sf12",
+   "games": 40,
+   "score": 0.35
   },
   {
    "a": "sf9",
    "b": "sf12",
    "games": 40,
-   "score": 0.425
+   "score": 0.313
   },
   {
    "a": "sf9",
    "b": "sf16",
    "games": 40,
-   "score": 0.35
+   "score": 0.237
   },
   {
    "a": "sf12",
    "b": "sf16",
    "games": 40,
-   "score": 0.487
+   "score": 0.412
   },
   {
    "a": "sf12",
    "b": "sf20",
    "games": 40,
-   "score": 0.4
+   "score": 0.287
   },
   {
    "a": "sf16",
    "b": "sf20",
    "games": 40,
-   "score": 0.537
+   "score": 0.438
   },
   {
    "a": "sf-elo1320",
@@ -215,13 +287,49 @@
    "a": "sf-elo1320",
    "b": "sf0-r10",
    "games": 40,
-   "score": 0.938
+   "score": 0.988
   },
   {
    "a": "sf-elo1320",
-   "b": "sf0-d1",
+   "b": "sf2",
    "games": 40,
-   "score": 0.675
+   "score": 0.313
+  },
+  {
+   "a": "sf-elo1320",
+   "b": "sf3",
+   "games": 40,
+   "score": 0.2
+  },
+  {
+   "a": "sf-elo1320",
+   "b": "sf4",
+   "games": 40,
+   "score": 0.063
+  },
+  {
+   "a": "sf-elo1320",
+   "b": "sf5",
+   "games": 40,
+   "score": 0.063
+  },
+  {
+   "a": "sf-elo1320",
+   "b": "sf6",
+   "games": 40,
+   "score": 0.025
+  },
+  {
+   "a": "sf-elo1320",
+   "b": "sf7",
+   "games": 40,
+   "score": 0.013
+  },
+  {
+   "a": "sf-elo1320",
+   "b": "sf8",
+   "games": 40,
+   "score": 0.05
   },
   {
    "a": "sf-elo1320",
@@ -245,25 +353,31 @@
    "a": "sf-elo1320",
    "b": "sf20",
    "games": 40,
-   "score": 0
+   "score": 0.013
   }
  ],
  "ratings": {
-  "random": -70,
-  "sf0-r75": 230,
-  "sf0-r50": 460,
-  "greedy": 500,
-  "sf0-r25": 770,
-  "sf0-r10": 980,
-  "sf0-d1": 1190,
-  "sf0-d5": 1270,
+  "random": -240,
+  "sf0-r75": 70,
+  "sf0-r50": 330,
+  "greedy": 400,
+  "sf0-r25": 640,
+  "sf0-r10": 870,
+  "sf0-d1": 1160,
+  "sf0-d5": 1170,
+  "sf0": 1270,
   "sf-elo1320": 1320,
-  "sf0": 1330,
-  "sf3": 1570,
-  "sf6": 1920,
-  "sf9": 2130,
-  "sf12": 2180,
-  "sf16": 2220,
-  "sf20": 2220
+  "sf1": 1380,
+  "sf2": 1440,
+  "sf3": 1590,
+  "sf4": 1650,
+  "sf5": 1780,
+  "sf6": 1890,
+  "sf7": 2000,
+  "sf8": 2010,
+  "sf9": 2030,
+  "sf12": 2130,
+  "sf16": 2210,
+  "sf20": 2260
  }
 }
