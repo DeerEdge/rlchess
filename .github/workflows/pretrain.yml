@@ -46,6 +46,10 @@ jobs:
         env:
           N: ${{ inputs.positions }}
       - run: npx tsx src/pretrain.ts chunks/*   # not an npm script: npm would run "pretrain" before every "train"
+        env:   # progress goes to kv `pretrain` for the page, one write per chunk
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         timeout-minutes: 130   # weights are saved after every chunk, so a timeout keeps what was done
       - uses: actions/cache/save@v4
         if: always()

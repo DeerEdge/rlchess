@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { toSample } from '../src/pretrain.ts'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { toSample, pretrain } from '../src/pretrain.ts'
 
 const line = (fen: string, evals: object[]) => JSON.stringify({ fen, evals })
 
@@ -30,4 +32,17 @@ test('Chess960-style castling (king takes own rook) becomes standard uci; a rook
 
 test('an underpromotion best move (outside the net\'s move set) is skipped', () => {
   assert.equal(toSample(line('8/P6k/8/8/8/8/8/K7 w - -', [{ pvs: [{ cp: 0, line: 'a7a8n' }], depth: 30 }])), null)
+})
+
+test('pretrain reports progress to kv after every chunk (lines read of the total, positions trained) and marks the last one done', async () => {
+  const cwd = process.cwd(); process.chdir(mkdtempSync(tmpdir() + '/pt'))
+  try {
+    const l = line('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - -', [{ pvs: [{ mate: 1, line: 'a1a8' }], depth: 245 }])
+    writeFileSync('aa', [l, l, 'not json'].join('\n')); writeFileSync('ab', l)
+    const puts: [string, string][] = []
+    await pretrain(['aa', 'ab'], { get: async () => null, put: async (k, v) => { puts.push([k, v]) } })
+    assert.deepEqual(puts.map(([k]) => k), ['pretrain', 'pretrain'])
+    assert.deepEqual(puts.map(([, v]) => { const { lines, total, positions, done } = JSON.parse(v); return { lines, total, positions, done } }),
+      [{ lines: 3, total: 4, positions: 2, done: false }, { lines: 4, total: 4, positions: 3, done: true }])
+  } finally { process.chdir(cwd) }
 })
