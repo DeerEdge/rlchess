@@ -35,15 +35,22 @@ jobs:
           echo /usr/games >> "$GITHUB_PATH"
       - run: which stockfish && (echo uci | stockfish | head -1) && nproc && cat /proc/cpuinfo | grep -m1 'model name'
       - run: npm ci
-      # restore → 3 × (4 play shards in parallel, one per core → train) → 4 eval shards in parallel → publish
+      # restore → 3 × (4 play shards in parallel, one per core → train) → 4 eval shards in parallel → publish.
+      # The page's compute map: vmstat samples CPU and memory every 5 s (in a subshell, so `wait` doesn't wait on it) and each phase logs its start.
       - run: |
+          (TZ=UTC vmstat -n -t 5 > vmstat.log &)
           npm run restore
           for c in 1 2 3; do
+            echo "play $(date +%s)" >> phases.log
             for i in 0 1 2 3; do npm run play -- $i & done; wait
+            echo "train $(date +%s)" >> phases.log
             npm run train
           done
+          echo "eval $(date +%s)" >> phases.log
           for i in 0 1 2 3; do npm run eval -- $i & done; wait
+          echo "publish $(date +%s)" >> phases.log
           npm run publish
+          pkill -x vmstat || true
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}

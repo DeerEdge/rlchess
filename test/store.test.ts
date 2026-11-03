@@ -70,10 +70,18 @@ test('restore pulls the worker files from kv and reports whether anything existe
   assert.equal(readFileSync(dir + '/state.json', 'utf8'), '{"run":3}'); assert.equal(readFileSync(dir + '/buffer.jsonl', 'utf8'), 'a\nb\n', 'buffer is gunzipped')
 })
 
-test('the training pool is the six rungs rated nearest the agent', () => {
+test('the training pool is the six rungs nearest a point 250 above the agent: mostly stronger opponents', () => {
   const near = (elo: number) => [...new Set(Array.from({ length: 400 }, () => trainingPool(elo).name))].sort()
   assert.deepEqual(near(-1000), TIERS.slice(0, 6).map(t => t.name).sort(), 'bottom of the ladder')
-  assert.equal(near(TIERS[7].rating).length, 6)
+  assert.deepEqual(near(858), ['sf-elo1320', 'sf0', 'sf0-d1', 'sf0-d5', 'sf0-r10', 'sf0-r25'])
+})
+
+test('publish keeps the compute timeline in state but only its averages in the chart history', async () => {
+  const kv = fakeKv(), compute = { cores: 4, memGB: 16, model: 'x', inFlight: 32, cpu: 71, memPeakGB: 5.2, phases: [['play', 0, 10]] as [string, number, number][], timeline: [[5, 70]] as [number, number][] }
+  await publish({ ...run, compute }, [], { weights: '{}', buffer: '', state: '{}', kv })
+  assert.deepEqual(JSON.parse(kv.store.get('state')!).compute, compute)
+  const point = JSON.parse(kv.store.get('metrics')!).at(-1)
+  assert.equal(point.cpu, 71); assert.equal(point.memPeakGB, 5.2); assert.equal(point.compute, undefined)
 })
 
 test('acpl averages the agent\'s own centipawn losses, from its side, clamped', async () => {

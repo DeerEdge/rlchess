@@ -13,7 +13,12 @@ A small chess net (142k params, conv tower + MCTS) that learns in a loop that ne
 3. **eval** ×4 — `RLCHESS_EVAL` (24) rated games, 6 against each of the 4 ladder rungs rated nearest the agent (the panel rotates as the rating moves), under the **frozen protocol**: alternating colours, temperature 1 for 4 plies then greedy, engines at `movetime 100` / `depth 8` (depth 8 takes ~5 ms, so the 6 games a shard plays at once get the same engine strength as one at a time), 200-ply cap = draw; each game gets per-ply Stockfish evals
 4. **publish** — standard Elo (K = 32) per rated game against that opponent's calibrated rating; average centipawn loss of the agent's moves; separate policy and value losses; write state, metrics, games, weights and buffer to KV
 
-Training policy targets are the search's visit counts (or an opponent engine's move), blended half-and-half with Stockfish depth 8's best move; value targets are Stockfish's eval, `tanh(cp/400)`. The training pool is the 6 rungs rated nearest the agent, plus self-play.
+Training policy targets are the search's visit counts (or an opponent engine's move), blended half-and-half with Stockfish depth 8's best move; value targets are Stockfish's eval, `tanh(cp/400)`. The training pool is the 6 rungs nearest a point 250 above the agent's rating (mostly stronger opponents, so their moves are better targets), plus self-play; the rated panel stays centred on the agent.
+
+## learning curve and compute
+
+- **Benchmark** (`bench.jsonl`, `src/bench.ts`): 2,000 Lichess positions never trained on (lines 3,000,001–3,002,000 of the evaluation database; pretraining read the first 3M). After every train pass the raw net (no search) is scored on how often its top move is Stockfish's best and on its value error, so learning shows without opponents or dice.
+- **Compute** (`src/usage.ts`): the workflow samples CPU and memory with `vmstat` every 5 s and logs each phase's start; publish adds the machine, mean CPU, peak memory, phase spans and the CPU timeline to the run summary.
 
 ## pretraining (`.github/workflows/pretrain.yml`, one-off)
 

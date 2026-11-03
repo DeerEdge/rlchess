@@ -1,4 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'node:fs'
+import os from 'node:os'
+import { usage } from './usage.ts'
+import { benchmark } from './bench.ts'
 import { fileURLToPath } from 'node:url'
 import { TIERS, type Tier } from './encode.ts'
 import { createNet, loadWeights, saveWeights } from './net.ts'
@@ -17,10 +20,11 @@ const BUDGET_MS = env('RLCHESS_BUDGET_MS', 3.5 * 60e3) // per play cycle: stop s
 const TRAIN_SAMPLES = 60000 /* one pass over the whole buffer */, MAX_PLIES = 200, ENGINE = { movetime: 100, depth: 8 }, EVAL_TEMPERATURE_PLIES = 4
 const ANNOTATOR = { name: 'stockfish', rating: 0, cmd: ['stockfish'] }, ANNOTATE_PLIES = 100 // per-ply evals of rated games: the page's eval bar (≤100 plies) and acpl
 const PANEL = 4, POOL = 6, BLEND = 0.5 // rated opponents per run (one per eval shard), training opponents, share of the policy target given to Stockfish's move
+const POOL_LIFT = 250 // the training pool centres this far above the agent's rating: mostly stronger opponents (the rated panel stays centred)
 const FILES = { state: 'state.json', weights: 'weights.json', buffer: 'buffer.jsonl' }
 
 type Rated = { tier: string; score: number } // one rated game: opponent and the agent's score
-type State = { run: number; elo: number; evalHistory: Rated[]; record: Record<string, Record3>; gamesTotal: number; steps?: number; loss: number; policyLoss: number; valueLoss: number } // steps: gradient steps, counted from the Lichess pretraining on
+type State = { run: number; elo: number; evalHistory: Rated[]; record: Record<string, Record3>; gamesTotal: number; steps?: number; loss: number; policyLoss: number; valueLoss: number; benchMatch?: number; benchValue?: number } // steps: gradient steps, counted from the Lichess pretraining on
 type Game = Awaited<ReturnType<typeof playGame>> & { agentWhite: boolean; against?: string }
 
 /** Play up to n games, `parallel` at a time (their searches share batched network calls); a game whose engine goes silent is dropped,
@@ -40,9 +44,9 @@ export async function playMany(n: number, factory: (i: number) => Promise<Game>,
 
 export const score = (g: { result: Result; agentWhite: boolean }) => g.result === '1/2-1/2' ? 0.5 : (g.result === '1-0') === g.agentWhite ? 1 : 0
 
-/** Training opponent: one of the six rungs rated nearest the agent. */
+/** Training opponent: one of the six rungs nearest a point POOL_LIFT above the agent. */
 export function trainingPool(elo: number) {
-  const pool = nearest(elo, POOL)
+  const pool = nearest(elo + POOL_LIFT, POOL)
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
@@ -123,9 +127,11 @@ async function main(mode: Mode, shard: number) {
     const buffer = ReplayBuffer.load(FILES.buffer), shards = take<{ games: number; samples: Sample[] }>('play')
     for (const s of shards) { buffer.append(s.samples); state.gamesTotal += s.games }
     const { loss, policy, value, steps } = await trainEpoch(net, shuffle([...buffer.samples]).slice(0, TRAIN_SAMPLES), { batch: 256, lr: 1e-3 })
-    Object.assign(state, { loss: +loss.toFixed(4), policyLoss: +policy.toFixed(4), valueLoss: +value.toFixed(4), steps: (state.steps ?? 0) + steps })
+    const bench = await benchmark(net) // held-out positions: the learning curve
+    Object.assign(state, { loss: +loss.toFixed(4), policyLoss: +policy.toFixed(4), valueLoss: +value.toFixed(4), steps: (state.steps ?? 0) + steps,
+      benchMatch: +bench.match.toFixed(3), benchValue: +bench.value.toFixed(4) })
     writeFileSync(FILES.state, JSON.stringify(state, null, 1)); await saveWeights(net, FILES.weights); buffer.save(FILES.buffer)
-    return console.log(`train: ${shards.length} shards, loss ${state.loss}, buffer ${buffer.samples.length}, ${secs()}s`)
+    return console.log(`train: ${shards.length} shards, loss ${state.loss}, buffer ${buffer.samples.length}, benchmark match ${state.benchMatch} value ${state.benchValue}, ${secs()}s`)
   }
 
   if (mode === 'eval') {
@@ -151,11 +157,19 @@ async function main(mode: Mode, shard: number) {
   const summary = { ts, run: ++state.run, elo: Math.round(state.elo), panel: nearest(state.elo, PANEL).map(t => t.name), ladder: TIERS.map(({ name, rating }) => ({ name, rating })),
     score40: +score40.toFixed(3), win40: +win40.toFixed(3), draw40: +draw40.toFixed(3), acpl: Math.round(acpl(games)),
     plies: Math.round(games.reduce((s, g) => s + g.plies, 0) / Math.max(1, games.length)), buffer: buffer.split('\n').filter(Boolean).length, seconds: secs(),
-    gamesTotal: (state.gamesTotal += games.length), steps: state.steps ?? 0, loss: state.loss, policyLoss: state.policyLoss, valueLoss: state.valueLoss, record: state.record }
+    gamesTotal: (state.gamesTotal += games.length), steps: state.steps ?? 0, loss: state.loss, policyLoss: state.policyLoss, valueLoss: state.valueLoss,
+    benchMatch: state.benchMatch, benchValue: state.benchValue, compute: machine(t0), record: state.record }
   state.evalHistory = state.evalHistory.slice(-40)
   writeFileSync(FILES.state, JSON.stringify(state, null, 1))
   await publish(summary, games, { weights: readFileSync(FILES.weights, 'utf8'), buffer, state: readFileSync(FILES.state, 'utf8') })
   console.log(`run ${summary.run} elo ${summary.elo} panel ${summary.panel.join(',')} score40 ${summary.score40} acpl ${summary.acpl} rated ${games.length} policy ${summary.policyLoss} value ${summary.valueLoss} ${summary.seconds}s`)
+}
+
+const text = (f: string) => existsSync(f) ? readFileSync(f, 'utf8') : ''
+/** The run's machine and how hard it worked (the workflow writes vmstat.log and phases.log); null when run without them (locally). */
+function machine(t0: number) {
+  const u = usage(text('vmstat.log'), text('phases.log'), t0 / 1000, Date.now() / 1000, os.totalmem() / 1024)
+  return u && { cores: os.cpus().length, memGB: Math.round(os.totalmem() / 2 ** 30), model: os.cpus()[0]?.model.trim() ?? '', inFlight: SHARDS * PARALLEL, ...u }
 }
 
 const MODES: Mode[] = ['restore', 'play', 'train', 'eval', 'publish']
