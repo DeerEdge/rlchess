@@ -34,3 +34,8 @@ test('tiers are a ladder sorted by rating with random first', () => {
   assert.equal(TIERS.filter(t => t.anchor).length, 1, 'exactly one anchor')
   assert.ok(TIERS.every((t, i) => !i || TIERS[i - 1].rating <= t.rating), 'not sorted by rating')
 })
+
+test('the ladder has every Stockfish skill level from 0 to 8', () => {
+  const skills = new Set(TIERS.filter(t => t.cmd && !t.depth && !t.random && t.options?.['Skill Level']).map(t => +t.options!['Skill Level']))
+  for (let k = 0; k <= 8; k++) assert.ok(skills.has(k), `skill ${k}`)
+})

@@ -8,7 +8,7 @@ permissions:
 jobs:
   calibrate:
     runs-on: ubuntu-24.04   # same image, and so the same apt Stockfish, as the loop
-    timeout-minutes: 90
+    timeout-minutes: 180   # ~58 pairings × 40 games since the ladder has every skill level 0–8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,4 +24,4 @@ jobs:
           git config user.name rlchess-bot
           git config user.email rlchess-bot@users.noreply.github.com
           git add tiers.json calibration.json
-          git commit -m "Calibrate the ladder" && git push
+          git commit -m "Calibrate the ladder" && git pull --rebase && git push   # main may have moved during the hour-plus run

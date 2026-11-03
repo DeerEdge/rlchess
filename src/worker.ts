@@ -44,6 +44,9 @@ export async function playMany(n: number, factory: (i: number) => Promise<Game>,
 
 export const score = (g: { result: Result; agentWhite: boolean }) => g.result === '1/2-1/2' ? 0.5 : (g.result === '1-0') === g.agentWhite ? 1 : 0
 
+/** The ladder as published: each rung's rating and engine settings, so the page can play any rung in the browser. */
+export const ladderView = () => TIERS.map(({ name, rating, cmd, options, depth, random }) => ({ name, rating, stockfish: !!cmd, options, depth, random }))
+
 /** Training opponent: one of the six rungs nearest a point POOL_LIFT above the agent. */
 export function trainingPool(elo: number) {
   const pool = nearest(elo + POOL_LIFT, POOL)
@@ -154,7 +157,7 @@ async function main(mode: Mode, shard: number) {
   }
   games.reverse() // newest first
   const buffer = readFileSync(FILES.buffer, 'utf8'), { score40, win40, draw40 } = rates(state.evalHistory)
-  const summary = { ts, run: ++state.run, elo: Math.round(state.elo), panel: nearest(state.elo, PANEL).map(t => t.name), ladder: TIERS.map(({ name, rating }) => ({ name, rating })),
+  const summary = { ts, run: ++state.run, elo: Math.round(state.elo), panel: nearest(state.elo, PANEL).map(t => t.name), ladder: ladderView(),
     score40: +score40.toFixed(3), win40: +win40.toFixed(3), draw40: +draw40.toFixed(3), acpl: Math.round(acpl(games)),
     plies: Math.round(games.reduce((s, g) => s + g.plies, 0) / Math.max(1, games.length)), buffer: buffer.split('\n').filter(Boolean).length, seconds: secs(),
     gamesTotal: (state.gamesTotal += games.length), steps: state.steps ?? 0, loss: state.loss, policyLoss: state.policyLoss, valueLoss: state.valueLoss,

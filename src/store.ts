@@ -1,8 +1,9 @@
 import { gzipSync, gunzipSync } from 'node:zlib'
 import type { Compute } from './usage.ts'
+import type { Tier } from './encode.ts'
 
 export type Record3 = { w: number; d: number; l: number }
-export type RunSummary = { ts: string; run: number; elo: number; panel: string[]; ladder: { name: string; rating: number }[]; score40: number; win40: number; draw40: number; acpl: number; plies: number; buffer: number; seconds: number; gamesTotal: number; steps: number; loss: number; policyLoss: number; valueLoss: number; benchMatch?: number; benchValue?: number; compute?: Compute | null; record: Record<string, Record3> }
+export type RunSummary = { ts: string; run: number; elo: number; panel: string[]; ladder: (Pick<Tier, 'name' | 'rating' | 'options' | 'depth' | 'random'> & { stockfish?: boolean })[]; score40: number; win40: number; draw40: number; acpl: number; plies: number; buffer: number; seconds: number; gamesTotal: number; steps: number; loss: number; policyLoss: number; valueLoss: number; benchMatch?: number; benchValue?: number; compute?: Compute | null; record: Record<string, Record3> }
 export type GameRecord = { ts: string; tier: string; kind: 'tier' | 'selfplay' | 'eval'; result: string; pgn: string; agentWhite: boolean; plies: number; evals?: number[]; elo?: number; delta?: number }
 export type Kv = { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
 

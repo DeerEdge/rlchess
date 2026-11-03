@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { publish, type RunSummary, type GameRecord } from '../src/store.ts'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import type { Sample } from '../src/game.ts'
-import { playMany, score, trainingPool, rates } from '../src/worker.ts'
+import { playMany, score, trainingPool, rates, ladderView } from '../src/worker.ts'
 import { TIERS } from '../src/encode.ts'
 import { EngineTimeout } from '../src/uci.ts'
 
@@ -73,7 +73,7 @@ test('restore pulls the worker files from kv and reports whether anything existe
 test('the training pool is the six rungs nearest a point 250 above the agent: mostly stronger opponents', () => {
   const near = (elo: number) => [...new Set(Array.from({ length: 400 }, () => trainingPool(elo).name))].sort()
   assert.deepEqual(near(-1000), TIERS.slice(0, 6).map(t => t.name).sort(), 'bottom of the ladder')
-  assert.deepEqual(near(858), ['sf-elo1320', 'sf0', 'sf0-d1', 'sf0-d5', 'sf0-r10', 'sf0-r25'])
+  assert.deepEqual(near(858), ['sf-elo1320', 'sf0', 'sf0-d1', 'sf0-d5', 'sf0-r10', 'sf1'])
 })
 
 test('publish keeps the compute timeline in state but only its averages in the chart history', async () => {
@@ -111,3 +111,10 @@ test('annotate attaches one eval per position; annotateSamples sets value target
   assert.deepEqual(s.map(x => x.pi), [{ a: 0.5, b: 0.5 }, { a: 0.3, b: 0.7 }], 'policy target: half the original, half Stockfish\'s move')
 })
 
+
+test('the published ladder carries each rung\u2019s engine settings, so the page can play it', () => {
+  const view = JSON.parse(JSON.stringify(ladderView())) as ReturnType<typeof ladderView>, by = (n: string) => view.find(t => t.name === n)! // as published
+  assert.deepEqual(by('sf3'), { name: 'sf3', rating: by('sf3').rating, stockfish: true, options: { 'Skill Level': '3' } })
+  assert.equal(by('sf0-r25').random, 0.25); assert.equal(by('sf0-d5').depth, 5)
+  assert.equal(by('greedy').stockfish, false)
+})
