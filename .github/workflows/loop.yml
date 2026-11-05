@@ -63,10 +63,11 @@ jobs:
             weights.json
             buffer.jsonl
           key: rlchess-state-v4-${{ github.run_id }}
-      # each run schedules the next one itself: at once after a success, at the 20-minute mark after a failure
+      # each run schedules the next one itself: at once after a success, at the 20-minute mark after a failure;
+      # the dispatch is retried, since a single API error (a 502 on 2026-11-04) would otherwise end the chain
       - if: always()
         run: |
           [ "${{ job.status }}" = success ] || sleep $(( 1200 - ($(date +%s) - START) > 0 ? 1200 - ($(date +%s) - START) : 0 ))
-          gh workflow run loop.yml --ref main
+          for i in 1 2 3 4 5; do gh workflow run loop.yml --ref main && exit 0; sleep 60; done; exit 1
         env:
           GH_TOKEN: ${{ github.token }}
